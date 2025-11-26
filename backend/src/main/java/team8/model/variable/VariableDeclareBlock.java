@@ -21,10 +21,7 @@ import team8.model.Block;
 
 @SuperBuilder
 @NoArgsConstructor
-public class VariableDeclareBlock extends Block {
-
-    @Column(name = "variable_name")
-    private String variableName;
+public class VariableDeclareBlock extends VariableBlock {
 
     @Column(name = "variable_type")
     private String variableType;
@@ -40,8 +37,8 @@ public class VariableDeclareBlock extends Block {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         Object value = context.evaluateExpression(initialValue);
-        context.setVariable(variableName, value);
-        context.sendOutput("VAR_DECLARE", variableName + " = " + value);
+        context.setVariable(getVariableName(), value);
+        context.sendOutput("VAR_DECLARE", getVariableName() + " = " + value);
         return new ExecutionResult(getNextBlockId());
     }
 }

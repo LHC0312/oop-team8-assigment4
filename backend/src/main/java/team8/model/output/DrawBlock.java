@@ -24,7 +24,7 @@ import java.util.Map;
 
 @SuperBuilder
 @NoArgsConstructor
-public class DrawBlock extends Block {
+public class DrawBlock extends OutputBlock {
 
     @Column(name = "shape")
     private String shape;
@@ -48,5 +48,14 @@ public class DrawBlock extends Block {
         drawData.put("size", size);
         context.sendOutput("DRAW", drawData);
         return new ExecutionResult(getNextBlockId());
+    }
+
+    @Override
+    public Object getOutputContent() {
+        Map<String, Object> content = new HashMap<>();
+        content.put("shape", shape);
+        content.put("color", color);
+        content.put("size", size);
+        return content;
     }
 }

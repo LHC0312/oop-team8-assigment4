@@ -21,7 +21,7 @@ import team8.model.Block;
 
 @SuperBuilder
 @NoArgsConstructor
-public class PrintBlock extends Block {
+public class PrintBlock extends OutputBlock {
 
     @Column(name = "message", length = 1000)
     private String message;
@@ -36,5 +36,10 @@ public class PrintBlock extends Block {
         Object evaluatedMessage = context.evaluateExpression(message);
         context.sendOutput("PRINT", evaluatedMessage);
         return new ExecutionResult(getNextBlockId());
+    }
+
+    @Override
+    public Object getOutputContent() {
+        return message;
     }
 }

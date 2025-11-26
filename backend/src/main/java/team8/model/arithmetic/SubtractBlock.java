@@ -21,16 +21,7 @@ import team8.model.Block;
 
 @SuperBuilder
 @NoArgsConstructor
-public class SubtractBlock extends Block {
-
-    @Column(name = "operand1")
-    private String operand1;
-
-    @Column(name = "operand2")
-    private String operand2;
-
-    @Column(name = "result_variable")
-    private String resultVariable;
+public class SubtractBlock extends ArithmeticBlock {
 
     @Override
     public String getBlockType() {
@@ -39,15 +30,15 @@ public class SubtractBlock extends Block {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Object val1 = context.evaluateExpression(operand1);
-        Object val2 = context.evaluateExpression(operand2);
+        Object val1 = context.evaluateExpression(getOperand1());
+        Object val2 = context.evaluateExpression(getOperand2());
 
         double num1 = val1 instanceof Number ? ((Number) val1).doubleValue() : Double.parseDouble(val1.toString());
         double num2 = val2 instanceof Number ? ((Number) val2).doubleValue() : Double.parseDouble(val2.toString());
         double result = num1 - num2;
 
-        context.setVariable(resultVariable, result);
-        context.sendOutput("SUBTRACT", resultVariable + " = " + num1 + " - " + num2 + " = " + result);
+        context.setVariable(getResultVariable(), result);
+        context.sendOutput("SUBTRACT", getResultVariable() + " = " + num1 + " - " + num2 + " = " + result);
         return new ExecutionResult(getNextBlockId());
     }
 }

@@ -30,7 +30,7 @@
 
 - **Framework**: Spring Boot 4.0.0
 - **Language**: Java 17
-- **Database**: MySQL / H2 (개발용)
+- **Database**: MySQL (개발) / PostgreSQL (운영)
 - **ORM**: JPA/Hibernate
 - **WebSocket**: STOMP over SockJS
 - **API Documentation**: Swagger/OpenAPI 3.0
@@ -47,16 +47,25 @@ Block (추상 클래스)
 │   ├── IfBlock (조건문)
 │   ├── ForBlock (반복문)
 │   └── WhileBlock (반복문)
-├── PrintBlock (출력)
-├── AlertBlock (알림)
-├── DrawBlock (그리기)
-├── AddBlock (덧셈)
-├── SubtractBlock (뺄셈)
-├── MultiplyBlock (곱셈)
-├── DivideBlock (나눗셈)
-├── VariableDeclareBlock (변수 선언)
-└── VariableAssignBlock (변수 할당)
+├── OutputBlock (출력 - 추상 클래스)
+│   ├── PrintBlock (콘솔 출력)
+│   ├── AlertBlock (알림)
+│   └── DrawBlock (그리기)
+├── ArithmeticBlock (산술 - 추상 클래스)
+│   ├── AddBlock (덧셈)
+│   ├── SubtractBlock (뺄셈)
+│   ├── MultiplyBlock (곱셈)
+│   └── DivideBlock (나눗셈)
+└── VariableBlock (변수 - 추상 클래스)
+    ├── VariableDeclareBlock (변수 선언)
+    └── VariableAssignBlock (변수 할당)
 ```
+
+**추상 클래스별 역할:**
+- **ControlBlock**: 조건식과 분기 관리 (conditionExpression, trueBranchId, falseBranchId)
+- **OutputBlock**: 출력 내용 관리 (getOutputContent() 추상 메서드)
+- **ArithmeticBlock**: 피연산자와 결과 변수 관리 (operand1, operand2, resultVariable)
+- **VariableBlock**: 변수명 관리 (variableName)
 
 ### 연결 그래프 구조
 
@@ -352,104 +361,193 @@ POST /api/projects
   "name": "Hello World",
   "description": "Simple greeting program"
 }
+// 응답: { "id": 1, "name": "Hello World", ... }
 
-// 2. START 블록 생성 (응답 ID: 1)
+// 2. START 블록 생성
 POST /api/blocks/project/1
 {
   "blockType": "START",
   "positionX": 100,
   "positionY": 100,
-  "order": 1,
-  "nextBlockId": 2
+  "order": 1
 }
+// 응답: { "id": 100, ... }
 
-// 3. PRINT 블록 생성 (응답 ID: 2)
+// 3. PRINT 블록 생성
 POST /api/blocks/project/1
 {
   "blockType": "PRINT",
   "positionX": 100,
   "positionY": 200,
   "order": 2,
-  "message": "Hello World",
-  "nextBlockId": null
+  "message": "Hello World"
+}
+// 응답: { "id": 101, ... }
+
+// 4. START 블록 업데이트 (PRINT 연결)
+PUT /api/blocks/100
+{
+  "blockType": "START",
+  "positionX": 100,
+  "positionY": 100,
+  "order": 1,
+  "nextBlockId": 101
 }
 
-// 4. 프로그램 실행
+// 5. 프로그램 실행
 POST /api/execution/projects/1/run
 ```
 
 ### 예시 2: 조건문을 사용한 프로그램
 
 ```json
-// 1. 변수 선언 (x = 10)
-POST /api/blocks/project/1
+// 1. 프로젝트 생성
+POST /api/projects
+{ "name": "Conditional Test" }
+// 응답: { "id": 2, ... }
+
+// 2. START 블록 생성
+POST /api/blocks/project/2
+{ "blockType": "START", "positionX": 100, "positionY": 100, "order": 1 }
+// 응답: { "id": 200, ... }
+
+// 3. 변수 선언 블록 생성 (x = 10)
+POST /api/blocks/project/2
 {
   "blockType": "VAR_DECLARE",
   "variableName": "x",
   "initialValue": "10",
-  "nextBlockId": 2
+  "positionX": 100,
+  "positionY": 200,
+  "order": 2
 }
+// 응답: { "id": 201, ... }
 
-// 2. IF 조건문
-POST /api/blocks/project/1
+// 4. IF 조건문 블록 생성
+POST /api/blocks/project/2
 {
   "blockType": "IF",
   "conditionExpression": "x > 5",
-  "trueBranchId": 3,
-  "falseBranchId": 4
+  "positionX": 100,
+  "positionY": 300,
+  "order": 3
 }
+// 응답: { "id": 202, ... }
 
-// 3. 조건이 참일 때 실행
-POST /api/blocks/project/1
+// 5. TRUE 분기 PRINT 블록 생성
+POST /api/blocks/project/2
 {
   "blockType": "PRINT",
   "message": "x is greater than 5",
-  "nextBlockId": null
+  "positionX": 200,
+  "positionY": 400,
+  "order": 4
 }
+// 응답: { "id": 203, ... }
 
-// 4. 조건이 거짓일 때 실행
-POST /api/blocks/project/1
+// 6. FALSE 분기 PRINT 블록 생성
+POST /api/blocks/project/2
 {
   "blockType": "PRINT",
   "message": "x is not greater than 5",
-  "nextBlockId": null
+  "positionX": 50,
+  "positionY": 400,
+  "order": 5
 }
+// 응답: { "id": 204, ... }
+
+// 7. 블록 연결 업데이트
+PUT /api/blocks/200
+{ "blockType": "START", "nextBlockId": 201, ... }
+
+PUT /api/blocks/201
+{ "blockType": "VAR_DECLARE", "variableName": "x", "initialValue": "10", "nextBlockId": 202, ... }
+
+PUT /api/blocks/202
+{ "blockType": "IF", "conditionExpression": "x > 5", "trueBranchId": 203, "falseBranchId": 204, ... }
+
+// 8. 프로그램 실행
+POST /api/execution/projects/2/run
 ```
 
 ### 예시 3: 반복문과 산술 연산
 
 ```json
-// 1. 변수 선언 (i = 0)
+// 1. 프로젝트 생성
+POST /api/projects
+{ "name": "Loop Test" }
+// 응답: { "id": 3, ... }
+
+// 2. START 블록 생성
+POST /api/blocks/project/3
+{ "blockType": "START", "positionX": 100, "positionY": 100, "order": 1 }
+// 응답: { "id": 300, ... }
+
+// 3. 변수 선언 블록 생성 (i = 0)
+POST /api/blocks/project/3
 {
   "blockType": "VAR_DECLARE",
   "variableName": "i",
   "initialValue": "0",
-  "nextBlockId": 2
+  "positionX": 100,
+  "positionY": 200,
+  "order": 2
 }
+// 응답: { "id": 301, ... }
 
-// 2. WHILE 반복문 (i < 5)
+// 4. WHILE 반복문 블록 생성 (i < 5)
+POST /api/blocks/project/3
 {
   "blockType": "WHILE",
   "conditionExpression": "i < 5",
-  "trueBranchId": 3,
-  "nextBlockId": null
+  "positionX": 100,
+  "positionY": 300,
+  "order": 3
 }
+// 응답: { "id": 302, ... }
 
-// 3. PRINT (i 값 출력)
+// 5. PRINT 블록 생성 (i 값 출력)
+POST /api/blocks/project/3
 {
   "blockType": "PRINT",
   "message": "i",
-  "nextBlockId": 4
+  "positionX": 200,
+  "positionY": 400,
+  "order": 4
 }
+// 응답: { "id": 303, ... }
 
-// 4. ADD (i = i + 1)
+// 6. ADD 블록 생성 (i = i + 1)
+POST /api/blocks/project/3
 {
   "blockType": "ADD",
   "operand1": "i",
   "operand2": "1",
   "resultVariable": "i",
-  "nextBlockId": 2
+  "positionX": 200,
+  "positionY": 500,
+  "order": 5
 }
+// 응답: { "id": 304, ... }
+
+// 7. 블록 연결 업데이트
+PUT /api/blocks/300
+{ "blockType": "START", "nextBlockId": 301, ... }
+
+PUT /api/blocks/301
+{ "blockType": "VAR_DECLARE", "variableName": "i", "initialValue": "0", "nextBlockId": 302, ... }
+
+PUT /api/blocks/302
+{ "blockType": "WHILE", "conditionExpression": "i < 5", "trueBranchId": 303, ... }
+
+PUT /api/blocks/303
+{ "blockType": "PRINT", "message": "i", "nextBlockId": 304, ... }
+
+PUT /api/blocks/304
+{ "blockType": "ADD", "operand1": "i", "operand2": "1", "resultVariable": "i", "nextBlockId": 302, ... }
+
+// 8. 프로그램 실행
+POST /api/execution/projects/3/run
 ```
 
 ## WebSocket 실시간 출력
