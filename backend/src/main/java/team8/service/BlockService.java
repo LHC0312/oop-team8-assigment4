@@ -150,6 +150,22 @@ public class BlockService {
                         .valueExpression(request.getValueExpression())
                         .build();
                 break;
+            case "MOD":
+                block = ModBlock.builder()
+                        .operand1(request.getOperand1())
+                        .operand2(request.getOperand2())
+                        .resultVariable(request.getResultVariable())
+                        .build();
+                break;
+
+            case "POW":
+                block = PowBlock.builder()
+                        .operand1(request.getOperand1())
+                        .operand2(request.getOperand2())
+                        .resultVariable(request.getResultVariable())
+                        .build();
+                break;
+
             default:
                 throw new RuntimeException("Unknown block type: " + request.getBlockType());
         }
@@ -218,8 +234,19 @@ public class BlockService {
             VariableAssignBlock assignBlock = (VariableAssignBlock) block;
             assignBlock.setVariableName(request.getVariableName());
             assignBlock.setValueExpression(request.getValueExpression());
+        } else if (block instanceof ModBlock) {
+        ModBlock modBlock = (ModBlock) block;
+        modBlock.setOperand1(request.getOperand1());
+        modBlock.setOperand2(request.getOperand2());
+        modBlock.setResultVariable(request.getResultVariable());
+        } else if (block instanceof PowBlock) {
+            PowBlock powBlock = (PowBlock) block;
+            powBlock.setOperand1(request.getOperand1());
+            powBlock.setOperand2(request.getOperand2());
+            powBlock.setResultVariable(request.getResultVariable());
         }
-    }
+
+}
 
     private BlockDto convertToDto(Block block) {
         BlockDto dto = BlockDto.builder()
@@ -280,6 +307,17 @@ public class BlockService {
             VariableAssignBlock assignBlock = (VariableAssignBlock) block;
             dto.setVariableName(assignBlock.getVariableName());
             dto.setValueExpression(assignBlock.getValueExpression());
+        } else if (block instanceof ModBlock) {
+            ModBlock m = (ModBlock) block;
+            dto.setOperand1(m.getOperand1());
+            dto.setOperand2(m.getOperand2());
+            dto.setResultVariable(m.getResultVariable());
+
+        } else if (block instanceof PowBlock) {
+            PowBlock p = (PowBlock) block;
+            dto.setOperand1(p.getOperand1());
+            dto.setOperand2(p.getOperand2());
+            dto.setResultVariable(p.getResultVariable());
         }
 
         return dto;
