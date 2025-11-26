@@ -48,6 +48,10 @@ public class ExecutionContext {
 
         expression = expression.trim();
 
+        if (expression.isEmpty()) {
+            return null;
+        }
+
         if (expression.startsWith("\"") && expression.endsWith("\"")) {
             return expression.substring(1, expression.length() - 1);
         }
@@ -74,7 +78,16 @@ public class ExecutionContext {
             String[] parts = condition.split("==");
             Object left = evaluateExpression(parts[0].trim());
             Object right = evaluateExpression(parts[1].trim());
-            return left != null && left.toString().equals(right.toString());
+
+            if (left == null || right == null) {
+                return false;
+            }
+
+            if (left instanceof Number && right instanceof Number) {
+                return toDouble(left) == toDouble(right);
+            }
+
+            return left.toString().equals(right.toString());
         } else if (condition.contains(">")) {
             String[] parts = condition.split(">");
             double left = toDouble(evaluateExpression(parts[0].trim()));
