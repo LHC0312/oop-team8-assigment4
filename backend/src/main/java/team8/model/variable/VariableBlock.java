@@ -21,4 +21,7 @@ public abstract class VariableBlock extends Block {
 
     @Column(name = "variable_name")
     private String variableName;
+
+    @Column(name = "variable_id")
+    private Long variableId;
 }

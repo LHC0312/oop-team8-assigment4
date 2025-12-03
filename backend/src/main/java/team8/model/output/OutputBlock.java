@@ -9,7 +9,7 @@ import team8.model.Block;
 
 /**
  * 출력 블록 추상 클래스
- * PRINT, ALERT, DRAW 등 화면에 출력하는 블록의 공통 부모
+ * PRINT 등 화면에 출력하는 블록의 공통 부모
  */
 @MappedSuperclass
 @Data

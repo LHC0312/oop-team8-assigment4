@@ -13,8 +13,12 @@ import team8.model.Block;
 import team8.model.Project;
 import team8.model.output.PrintBlock;
 import team8.model.start.StartBlock;
+import team8.model.variable.VariableDeclareBlock;
+import team8.dto.ValueDto;
 import team8.repository.BlockRepository;
 import team8.repository.ProjectRepository;
+import team8.repository.VariableRepository;
+import team8.repository.ExpressionRepository;
 
 import java.util.Arrays;
 import java.util.List;
@@ -32,6 +36,12 @@ class BlockServiceTest {
 
     @Mock
     private ProjectRepository projectRepository;
+
+    @Mock
+    private ExpressionRepository expressionRepository;
+
+    @Mock
+    private VariableRepository variableRepository;
 
     @InjectMocks
     private BlockService blockService;
@@ -54,6 +64,15 @@ class BlockServiceTest {
                 .nextBlockId(null)
                 .project(testProject)
                 .build();
+
+        when(variableRepository.findByProjectIdAndName(anyLong(), anyString()))
+                .thenReturn(java.util.Optional.empty());
+        when(variableRepository.save(any(team8.model.variable.Variable.class)))
+                .thenAnswer(inv -> {
+                    team8.model.variable.Variable v = inv.getArgument(0);
+                    if (v.getId() == null) v.setId(100L);
+                    return v;
+                });
     }
 
     @Test
@@ -110,13 +129,13 @@ class BlockServiceTest {
     void testCreatePrintBlock() {
         BlockCreateRequest request = new BlockCreateRequest();
         request.setBlockType("PRINT");
-        request.setMessage("Hello World");
+        request.setMessage(ValueDto.builder().valueType("LITERAL").data("Hello World").build());
         request.setPositionX(100);
         request.setPositionY(200);
 
         PrintBlock printBlock = PrintBlock.builder()
                 .id(2L)
-                .message("Hello World")
+                .messageExpressionBlock(team8.model.expression.LiteralExpressionBlock.builder().value("Hello World").literalType("STRING").build())
                 .positionX(100)
                 .positionY(200)
                 .build();
@@ -128,7 +147,8 @@ class BlockServiceTest {
 
         assertNotNull(created);
         assertEquals("PRINT", created.getBlockType());
-        assertEquals("Hello World", created.getMessage());
+        assertNotNull(created.getMessage());
+        assertEquals("Hello World", created.getMessage().getData());
 
         verify(projectRepository, times(1)).findById(1L);
         verify(blockRepository, times(1)).save(any(Block.class));
@@ -173,5 +193,33 @@ class BlockServiceTest {
         });
 
         verify(projectRepository, times(1)).findById(1L);
+    }
+
+    @Test
+    @DisplayName("블록 업데이트 시 null 필드는 기존 값을 유지한다")
+    void testUpdateBlockDoesNotOverwriteWithNull() {
+        VariableDeclareBlock declareBlock = VariableDeclareBlock.builder()
+                .id(1L)
+                .variableId(10L)
+                .variableName("i")
+                .variableType("number")
+                .initialExpressionBlock(team8.model.expression.LiteralExpressionBlock.builder().value("0").literalType("NUMBER").build())
+                .nextBlockId(2L)
+                .build();
+
+        BlockCreateRequest updateRequest = new BlockCreateRequest();
+        updateRequest.setBlockType("VAR_DECLARE");
+        updateRequest.setNextBlockId(5L); // 나머지 필드는 null
+
+        when(blockRepository.findById(1L)).thenReturn(Optional.of(declareBlock));
+
+        BlockDto updated = blockService.updateBlock(1L, updateRequest);
+
+        assertEquals("i", updated.getVariableName());
+        assertEquals("number", updated.getVariableType());
+        assertNotNull(updated.getInitial(), "초기값이 null로 덮어쓰여서는 안 된다");
+        assertEquals(5L, updated.getNextBlockId());
+
+        verify(blockRepository, times(1)).findById(1L);
     }
 }

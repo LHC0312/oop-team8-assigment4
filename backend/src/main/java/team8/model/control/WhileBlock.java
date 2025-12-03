@@ -26,8 +26,8 @@ public class WhileBlock extends ControlBlock {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        boolean condition = context.evaluateCondition(getConditionExpression());
-        context.sendOutput("WHILE", "Condition: " + getConditionExpression() + " = " + condition);
+        boolean condition = context.evaluateCondition(getConditionExpressionBlock());
+        context.sendDebug("WHILE", "Condition: " + condition);
 
         if (condition) {
             return new ExecutionResult(getTrueBranchId());

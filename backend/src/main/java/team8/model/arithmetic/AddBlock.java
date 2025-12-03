@@ -30,15 +30,19 @@ public class AddBlock extends ArithmeticBlock {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Object val1 = context.evaluateExpression(getOperand1());
-        Object val2 = context.evaluateExpression(getOperand2());
+        Object val1 = context.evaluateExpression(getOperand1Block());
+        Object val2 = context.evaluateExpression(getOperand2Block());
 
-        double num1 = val1 instanceof Number ? ((Number) val1).doubleValue() : Double.parseDouble(val1.toString());
-        double num2 = val2 instanceof Number ? ((Number) val2).doubleValue() : Double.parseDouble(val2.toString());
+        if (getResultVariableId() == null) {
+            throw new IllegalStateException("resultVariableId is required for ADD block");
+        }
+
+        double num1 = (val1 instanceof Number) ? ((Number) val1).doubleValue() : Double.parseDouble(String.valueOf(val1));
+        double num2 = (val2 instanceof Number) ? ((Number) val2).doubleValue() : Double.parseDouble(String.valueOf(val2));
         double result = num1 + num2;
 
-        context.setVariable(getResultVariable(), result);
-        context.sendOutput("ADD", getResultVariable() + " = " + num1 + " + " + num2 + " = " + result);
+        context.setVariable(getResultVariableId(), result);
+        context.sendDebug("ADD", getResultVariable() + " = " + num1 + " + " + num2 + " = " + result);
         return new ExecutionResult(getNextBlockId());
     }
 }

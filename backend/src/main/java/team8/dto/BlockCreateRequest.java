@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import team8.dto.ValueDto;
 
 @Data
 @NoArgsConstructor
@@ -16,25 +17,22 @@ public class BlockCreateRequest {
     private Integer order;
     private Long nextBlockId;
 
-    private String conditionExpression;
     private Long trueBranchId;
     private Long falseBranchId;
 
-    private String initExpression;
-    private String incrementExpression;
+    private ValueDto condition;
+    private ValueDto init;
+    private ValueDto increment;
+    private ValueDto message;
 
-    private String message;
+    private ValueDto operand1;
+    private ValueDto operand2;
+    private String resultVariable; // 호환용
+    private Long resultVariableId;
 
-    private String shape;
-    private String color;
-    private Integer size;
-
-    private String operand1;
-    private String operand2;
-    private String resultVariable;
-
-    private String variableName;
+    private String variableName; // VAR_DECLARE 전용
     private String variableType;
-    private String initialValue;
-    private String valueExpression;
+    private Long variableId; // 참조용 (VAR_ASSIGN 등)
+    private ValueDto initial;
+    private ValueDto value;
 }

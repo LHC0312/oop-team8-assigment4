@@ -1,15 +1,13 @@
 package team8.model.control;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.DiscriminatorValue;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import team8.execution.ExecutionContext;
 import team8.execution.ExecutionResult;
+import team8.model.expression.ExpressionBlock;
 
 @Entity
 @Table(name = "for_blocks")
@@ -20,11 +18,13 @@ import team8.execution.ExecutionResult;
 @NoArgsConstructor
 public class ForBlock extends ControlBlock {
 
-    @Column(name = "init_expression")
-    private String initExpression;
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JoinColumn(name = "init_expression_id")
+    private ExpressionBlock initExpressionBlock;
 
-    @Column(name = "increment_expression")
-    private String incrementExpression;
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JoinColumn(name = "increment_expression_id")
+    private ExpressionBlock incrementExpressionBlock;
 
     @Override
     public String getBlockType() {
@@ -33,8 +33,8 @@ public class ForBlock extends ControlBlock {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        boolean condition = context.evaluateCondition(getConditionExpression());
-        context.sendOutput("FOR", "Condition: " + getConditionExpression() + " = " + condition);
+        boolean condition = context.evaluateCondition(getConditionExpressionBlock());
+        context.sendDebug("FOR", "Condition: " + condition);
 
         if (condition) {
             return new ExecutionResult(getTrueBranchId());

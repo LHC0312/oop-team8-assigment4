@@ -26,8 +26,8 @@ public class IfBlock extends ControlBlock {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        boolean condition = context.evaluateCondition(getConditionExpression());
-        context.sendOutput("IF", "Condition: " + getConditionExpression() + " = " + condition);
+        boolean condition = context.evaluateCondition(getConditionExpressionBlock());
+        context.sendDebug("IF", "Condition: " + condition);
 
         if (condition) {
             return new ExecutionResult(getTrueBranchId());

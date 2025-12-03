@@ -1,657 +1,157 @@
-# Block Coding Application
+# Block Coding Backend
 
-스크래치/엔트리와 같은 블록 코딩 애플리케이션의 백엔드 시스템입니다. Spring Boot 기반으로 구축되었으며, MVC 패턴과 객체지향 설계를 적용했습니다.
-
-## 목차
-
-- [프로젝트 개요](#프로젝트-개요)
-- [기술 스택](#기술-스택)
-- [시스템 아키텍처](#시스템-아키텍처)
-- [블록 타입](#블록-타입)
-- [프로젝트 구조](#프로젝트-구조)
-- [API 문서](#api-문서)
-- [실행 방법](#실행-방법)
-- [사용 예시](#사용-예시)
-
-## 프로젝트 개요
-
-이 프로젝트는 블록 기반 프로그래밍을 지원하는 시각적 코딩 플랫폼의 백엔드입니다. 사용자는 블록을 연결하여 프로그램을 작성하고, 웹소켓을 통해 실시간으로 실행 결과를 확인할 수 있습니다.
-
-### 주요 기능
-
-- **블록 기반 프로그래밍**: 14가지 타입의 블록으로 프로그램 구성
-- **실시간 실행**: WebSocket을 통한 실시간 실행 결과 스트리밍
-- **단방향 연결 그래프**: 블록 간 연결을 통한 프로그램 흐름 제어
-- **제어 구조 분기**: IF, FOR, WHILE 블록의 조건부 분기 지원
-- **변수 및 연산**: 변수 선언/할당, 사칙연산 지원
-- **REST API**: 프로젝트 및 블록 CRUD 작업 지원
+Spring Boot 4.0.0 기반의 블록 코딩 백엔드입니다. Java 17, Gradle을 사용하며 WebSocket(STOMP)으로 실행 로그/디버그 메시지를 스트리밍합니다.
 
 ## 기술 스택
+- Spring Boot 4.0.0 (webmvc, websocket, data-jpa)
+- Java 17, Gradle
+- DB: MySQL(dev, `application-dev.yml`) / PostgreSQL 드라이버 포함
+- Swagger(OpenAPI): `/swagger-ui.html`
+- SockJS + STOMP WebSocket: 엔드포인트 `/ws`, 구독 채널 `/topic/execution/{sessionId}`
 
-- **Framework**: Spring Boot 4.0.0
-- **Language**: Java 17
-- **Database**: MySQL (개발) / PostgreSQL (운영)
-- **ORM**: JPA/Hibernate
-- **WebSocket**: STOMP over SockJS
-- **API Documentation**: Swagger/OpenAPI 3.0
-- **Build Tool**: Gradle
+## 핵심 설계 포인트
+- **실행 블록 11종**: START, IF, FOR, WHILE, PRINT, ADD, SUBTRACT, MULTIPLY, DIVIDE, VAR_DECLARE, VAR_ASSIGN
+- **값 블록(Value Block) 트리**: 리터럴/변수/단항/이항 모두 블록이며 `blockId`를 가진다. 실행 블록 안에 중첩 객체로 들어간다(문자열 표현식 사용 없음).
+- **타입 강제**: 변수 선언 시 `variableType` 필수(`number|string|boolean`). 산술/비교는 숫자 전용, 문자열+숫자 조합은 즉시 오류.
+- **변수 무결성**: 변수는 별도 엔티티(`variables` 테이블)로 관리되며 프로젝트 내 이름은 유니크. 블록/값 블록은 `variableId`로 참조(이름은 보조용)하며, 산술 결과도 `resultVariableId`를 필수로 지정.
+- **실행 제어**: 디버그/트레이스 실행, 디버그 스텝 실행, 강제 중지, 실행 중 변수 조회.
+- **분기 보정**: 분기 내부 마지막 블록의 `nextBlockId`가 비어 있으면 WHILE/FOR는 부모로, IF/ELSE는 부모의 `nextBlockId`로 연결.
+- **시드 데이터**: 애플리케이션 기동 시 데이터가 비어 있으면 4개 프로젝트 자동 생성.
 
-## 시스템 아키텍처
-
-### 블록 상속 구조
-
+## 실제 프로젝트 구조
 ```
-Block (추상 클래스)
-├── StartBlock (시작)
-├── ControlBlock (제어 - 추상 클래스)
-│   ├── IfBlock (조건문)
-│   ├── ForBlock (반복문)
-│   └── WhileBlock (반복문)
-├── OutputBlock (출력 - 추상 클래스)
-│   ├── PrintBlock (콘솔 출력)
-│   ├── AlertBlock (알림)
-│   └── DrawBlock (그리기)
-├── ArithmeticBlock (산술 - 추상 클래스)
-│   ├── AddBlock (덧셈)
-│   ├── SubtractBlock (뺄셈)
-│   ├── MultiplyBlock (곱셈)
-│   └── DivideBlock (나눗셈)
-└── VariableBlock (변수 - 추상 클래스)
-    ├── VariableDeclareBlock (변수 선언)
-    └── VariableAssignBlock (변수 할당)
-```
-
-**추상 클래스별 역할:**
-- **ControlBlock**: 조건식과 분기 관리 (conditionExpression, trueBranchId, falseBranchId)
-- **OutputBlock**: 출력 내용 관리 (getOutputContent() 추상 메서드)
-- **ArithmeticBlock**: 피연산자와 결과 변수 관리 (operand1, operand2, resultVariable)
-- **VariableBlock**: 변수명 관리 (variableName)
-
-### 연결 그래프 구조
-
-각 블록은 다음 블록으로의 연결을 나타내는 필드를 가집니다:
-- **일반 블록**: `nextBlockId` - 다음에 실행할 블록
-- **제어 블록**: `trueBranchId`, `falseBranchId` - 조건에 따른 분기
-
-## 블록 타입
-
-### 1. 시작 블록 (Start)
-
-| 블록 | 설명 | 필드 |
-|------|------|------|
-| StartBlock | 프로그램 시작점 | nextBlockId |
-
-### 2. 제어 블록 (Control)
-
-| 블록 | 설명 | 주요 필드 |
-|------|------|-----------|
-| IfBlock | 조건문 | conditionExpression, trueBranchId, falseBranchId |
-| ForBlock | 반복문 | conditionExpression, initExpression, incrementExpression, trueBranchId |
-| WhileBlock | 반복문 | conditionExpression, trueBranchId |
-
-**조건식 예시**: `x > 10`, `y == 5`, `a < b`
-
-### 3. 출력 블록 (Output)
-
-| 블록 | 설명 | 주요 필드 |
-|------|------|-----------|
-| PrintBlock | 콘솔 출력 | message |
-| AlertBlock | 알림 메시지 | message |
-| DrawBlock | 도형 그리기 | shape, color, size |
-
-### 4. 산술 블록 (Arithmetic)
-
-| 블록 | 설명 | 주요 필드 |
-|------|------|-----------|
-| AddBlock | 덧셈 | operand1, operand2, resultVariable |
-| SubtractBlock | 뺄셈 | operand1, operand2, resultVariable |
-| MultiplyBlock | 곱셈 | operand1, operand2, resultVariable |
-| DivideBlock | 나눗셈 | operand1, operand2, resultVariable |
-
-### 5. 변수 블록 (Variable)
-
-| 블록 | 설명 | 주요 필드 |
-|------|------|-----------|
-| VariableDeclareBlock | 변수 선언 | variableName, variableType, initialValue |
-| VariableAssignBlock | 변수 할당 | variableName, valueExpression |
-
-## 프로젝트 구조
-
-```
-backend/
-├── src/main/java/team8/
-│   ├── model/                    # 도메인 모델 (Entity)
-│   │   ├── Block.java           # 블록 추상 클래스
-│   │   ├── Project.java         # 프로젝트 엔티티
-│   │   ├── start/               # 시작 블록
-│   │   │   └── StartBlock.java
-│   │   ├── control/             # 제어 블록
-│   │   │   ├── ControlBlock.java
-│   │   │   ├── IfBlock.java
-│   │   │   ├── ForBlock.java
-│   │   │   └── WhileBlock.java
-│   │   ├── output/              # 출력 블록
-│   │   │   ├── PrintBlock.java
-│   │   │   ├── AlertBlock.java
-│   │   │   └── DrawBlock.java
-│   │   ├── arithmetic/          # 산술 블록
-│   │   │   ├── AddBlock.java
-│   │   │   ├── SubtractBlock.java
-│   │   │   ├── MultiplyBlock.java
-│   │   │   └── DivideBlock.java
-│   │   └── variable/            # 변수 블록
-│   │       ├── VariableDeclareBlock.java
-│   │       └── VariableAssignBlock.java
-│   ├── controller/              # REST API 컨트롤러
-│   │   ├── ProjectController.java
-│   │   ├── BlockController.java
-│   │   └── ExecutionController.java
-│   ├── service/                 # 비즈니스 로직
-│   │   ├── ProjectService.java
-│   │   ├── BlockService.java
-│   │   └── BlockExecutionService.java
-│   ├── repository/              # 데이터 액세스
-│   │   ├── ProjectRepository.java
-│   │   └── BlockRepository.java
-│   ├── dto/                     # 데이터 전송 객체
-│   │   ├── ProjectDto.java
-│   │   ├── ProjectCreateRequest.java
-│   │   ├── BlockDto.java
-│   │   └── BlockCreateRequest.java
-│   ├── execution/               # 실행 엔진
-│   │   ├── ExecutionContext.java
-│   │   ├── ExecutionResult.java
-│   │   └── OutputMessage.java
-│   └── config/                  # 설정
-│       ├── SwaggerConfig.java
-│       └── WebSocketConfig.java
-└── src/main/resources/
-    ├── application.yml          # 애플리케이션 설정
-    └── static/
-        └── index.html          # 테스트 클라이언트
+src/main/java/team8
+├── Application.java
+├── config/                # WebSocket, Swagger, CORS, 데이터 시드
+│   ├── DataInitializer.java
+│   ├── SwaggerConfig.java
+│   ├── WebConfig.java
+│   └── WebSocketConfig.java
+├── controller/            # REST 컨트롤러
+│   ├── BlockController.java
+│   ├── ExecutionController.java
+│   └── ProjectController.java
+├── dto/                   # DTO 요청/응답
+│   ├── BlockCreateRequest.java
+│   ├── BlockDto.java
+│   ├── ExpressionCreateRequest.java
+│   ├── ExpressionDto.java
+│   ├── ProjectCreateRequest.java
+│   ├── ProjectDto.java
+│   └── ValueDto.java
+├── execution/             # 실행 엔진
+│   ├── ExecutionContext.java
+│   ├── ExecutionResult.java
+│   └── OutputMessage.java
+├── model/
+│   ├── Block.java
+│   ├── Project.java
+│   ├── arithmetic/  (Add, Subtract, Multiply, Divide, ArithmeticBlock)
+│   ├── control/     (ControlBlock, IfBlock, ForBlock, WhileBlock)
+│   ├── expression/  (ExpressionBlock + Literal/Variable/Unary/Binary)  ※ 값 블록
+│   ├── output/      (OutputBlock, PrintBlock)
+│   ├── start/       (StartBlock)
+│   └── variable/    (VariableBlock, VariableDeclareBlock, VariableAssignBlock)
+├── repository/           # Block/Project/Expression JPA 리포지토리
+├── service/
+│   ├── BlockExecutionService.java
+│   ├── BlockService.java
+│   ├── BlockServiceHelper.java
+│   └── ProjectService.java
+└── resources/
+    ├── application.yml (active profile 설정)
+    ├── application-dev.yml (MySQL 설정)
+    ├── application-prod.yml
+    └── static/index.html (간단한 테스트 클라이언트)
 ```
 
-## API 문서
+## 값 블록(ValueDto) 구조
+- 공통 필드: `blockId`, `valueType`(LITERAL|VARIABLE|UNARY|BINARY)
+- LITERAL: `data` (number/string/boolean) → DB에는 literalType과 함께 저장
+- VARIABLE: `variableName`
+- UNARY: `operator`, `operand`
+- BINARY: `operator`, `left`, `right`
 
-### 프로젝트 API
+### 블록 DTO 구조 (요약)
+- 공통: `blockType`, `positionX`, `positionY`, `order`, `nextBlockId`
+- IF/WHILE/FOR: `condition`(ValueDto), `trueBranchId`, `falseBranchId`(IF), FOR는 `init`, `increment`
+- PRINT: `message`(ValueDto)
+- 산술(ADD/SUBTRACT/MULTIPLY/DIVIDE): `operand1`, `operand2`(ValueDto), `resultVariable`
+- 변수: VAR_DECLARE(`variableName`, `variableType`, `initial` ValueDto), VAR_ASSIGN(`variableName`, `value` ValueDto)
 
-#### 프로젝트 목록 조회
-```http
-GET /api/projects
-```
-
-#### 프로젝트 생성
-```http
-POST /api/projects
-Content-Type: application/json
-
-{
-  "name": "My First Program",
-  "description": "Hello World program"
-}
-```
-
-#### 프로젝트 조회
-```http
-GET /api/projects/{id}
-```
-
-#### 프로젝트 수정
-```http
-PUT /api/projects/{id}
-Content-Type: application/json
-
-{
-  "name": "Updated Program",
-  "description": "Updated description"
-}
-```
-
-#### 프로젝트 삭제
-```http
-DELETE /api/projects/{id}
-```
-
-### 블록 API
-
-#### 블록 생성
-```http
-POST /api/blocks/project/{projectId}
-Content-Type: application/json
-
-{
-  "blockType": "PRINT",
-  "positionX": 100,
-  "positionY": 200,
-  "order": 1,
-  "message": "Hello World",
-  "nextBlockId": null
-}
-```
-
-#### 프로젝트의 블록 목록 조회
-```http
-GET /api/blocks/project/{projectId}
-```
-
-#### 블록 수정
-```http
-PUT /api/blocks/{id}
-Content-Type: application/json
-
-{
-  "blockType": "PRINT",
-  "message": "Updated message",
-  "nextBlockId": 2
-}
-```
-
-#### 블록 삭제
-```http
-DELETE /api/blocks/{id}
-```
-
-### 실행 API
-
-#### 프로젝트 실행
-```http
-POST /api/execution/projects/{projectId}/run
-```
-
-**응답**:
+### 응답 예시 (Loop)
 ```json
 {
-  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-  "message": "Execution started. Subscribe to /topic/execution/{sessionId} for real-time output"
+  "blocks": [
+    {"id":1,"blockType":"START","nextBlockId":2},
+    {"id":2,"blockType":"VAR_DECLARE","variableName":"i","variableType":"number",
+     "initial":{"blockId":11,"valueType":"LITERAL","data":0},
+     "nextBlockId":3},
+    {"id":3,"blockType":"WHILE",
+     "condition":{"blockId":12,"valueType":"BINARY","operator":"<",
+       "left":{"blockId":13,"valueType":"VARIABLE","variableName":"i"},
+       "right":{"blockId":14,"valueType":"LITERAL","data":5}},
+     "trueBranchId":4},
+    {"id":4,"blockType":"PRINT",
+     "message":{"blockId":15,"valueType":"VARIABLE","variableName":"i"},
+     "nextBlockId":5},
+    {"id":5,"blockType":"ADD",
+     "operand1":{"blockId":16,"valueType":"VARIABLE","variableName":"i"},
+     "operand2":{"blockId":17,"valueType":"LITERAL","data":1},
+     "resultVariable":"i",
+     "nextBlockId":3}
+  ]
 }
 ```
 
+## API 개요
+- 프로젝트: `GET /api/projects`, `GET /api/projects/{id}`, `GET /api/projects/search?keyword=...`, `POST /api/projects`, `PUT /api/projects/{id}`, `DELETE /api/projects/{id}`
+- 블록: `GET /api/blocks/project/{projectId}`, `GET /api/blocks/{id}`, `POST /api/blocks/project/{projectId}`, `PUT /api/blocks/{id}`, `DELETE /api/blocks/{id}`
+  - 블록 생성/수정 시 문자열 표현식 없이 ValueDto 트리를 전달해야 함.
+- 실행: `POST /api/execution/projects/{projectId}/run?debug=false&trace=false`,
+  `POST /api/execution/projects/{projectId}/run/normal`,
+  `POST /api/execution/projects/{projectId}/run/trace`,
+  `POST /api/execution/sessions/{sessionId}/step`,
+  `POST /api/execution/sessions/{sessionId}/stop`,
+  `GET /api/execution/sessions/{sessionId}/variables`
+  - WebSocket 구독: `/topic/execution/{sessionId}` (`DEBUG_WAIT`, `TRACE`, `PRINT` 등 메시지 수신)
+
+## 자동 생성 샘플 데이터 (DataInitializer)
+데이터가 비어 있을 때만 아래 4개 프로젝트가 생성됩니다. 모든 조건/연산/리터럴은 Value 블록 트리로 넣습니다.
+1) Hello World
+   - START → PRINT("Hello World!")
+2) Conditional Test
+   - START → VAR_DECLARE(x: number = 10) → IF(x > 5)
+   - true: PRINT("x is greater than 5") / false: PRINT("x is not greater than 5")
+3) Loop Test
+   - START → VAR_DECLARE(i: number = 0) → WHILE(i < 5)
+   - WHILE true 분기: PRINT(i) → ADD(i = i + 1) → (다시 WHILE)
+4) Arithmetic Operations
+   - START → VAR_DECLARE(a=10) → VAR_DECLARE(b=5) →
+     ADD(a+b → result1) → PRINT("Addition: result1") →
+     SUBTRACT(a-b → result2) → PRINT("Subtraction: result2") →
+     MULTIPLY(a*b → result3) → PRINT("Multiplication: result3") →
+     DIVIDE(a/b → result4) → PRINT("Division: result4")
+
+## 타입/연산 규칙
+- 변수 선언 시 `variableType` 필수(`number|string|boolean`), 산술 블록은 `number` 타입만 허용.
+- `+`는 숫자+숫자, 문자열+문자열만 허용. 그 외 조합은 400/실행 오류.
+- 비교 연산은 숫자 전용, 논리 연산은 불리언 전용.
+- Division/Modulo 0은 오류.
+
 ## 실행 방법
-
-### 1. 데이터베이스 설정
-
-**MySQL 사용 시**:
 ```bash
-# MySQL 데이터베이스 생성
-CREATE DATABASE blockcodingdb;
-```
-
-`application.yml` 설정 확인:
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/blockcodingdb
-    username: root
-    password: your_password
-```
-
-### 2. 애플리케이션 실행
-
-```bash
-# Gradle로 빌드 및 실행
+# 개발 프로필(dev)에서 MySQL(blockcodingdb, root/1234) 사용
 ./gradlew bootRun
 
-# 또는 jar 파일로 실행
+# 빌드 후 실행
 ./gradlew build
 java -jar build/libs/oop-team8-assigment4-0.0.1-SNAPSHOT.jar
 ```
-
-### 3. API 문서 확인
-
-애플리케이션 실행 후 Swagger UI 접속:
-```
-http://localhost:8080/swagger-ui.html
-```
-
-### 4. 웹 UI 접속
-
-웹 브라우저에서 접속:
-```
-http://localhost:8080
-```
-
-또는
-
-```
-http://localhost:8080/index.html
-```
-
-애플리케이션이 시작되면 자동으로 4개의 테스트 프로젝트가 생성됩니다:
-- **Hello World**: 간단한 출력 프로그램
-- **Conditional Test**: IF 조건문 예제
-- **Loop Test**: WHILE 반복문 예제
-- **Arithmetic Operations**: 사칙연산 예제
-
-## 웹 UI 사용법
-
-### 기능
-
-1. **프로젝트 목록**: 왼쪽 사이드바에서 모든 프로젝트를 확인할 수 있습니다.
-2. **프로젝트 선택**: 프로젝트를 클릭하면 해당 프로젝트의 블록 목록이 표시됩니다.
-3. **블록 정보**: 각 블록의 타입, 순서, 상세 정보, 연결 정보를 테이블 형식으로 확인할 수 있습니다.
-4. **프로젝트 실행**: Run Project 버튼을 클릭하면 프로그램이 실행되고, WebSocket을 통해 실시간 실행 결과를 확인할 수 있습니다.
-5. **출력 화면**: 실행 결과가 터미널 스타일의 화면에 실시간으로 표시됩니다.
-
-### 자동 생성된 테스트 데이터
-
-애플리케이션 시작 시 다음 4개의 프로젝트가 자동으로 생성됩니다:
-
-1. **Hello World** (ID: 1)
-   - START → PRINT "Hello World!"
-
-2. **Conditional Test** (ID: 2)
-   - START → VAR_DECLARE(x=10) → IF(x>5) → PRINT (true/false branches)
-
-3. **Loop Test** (ID: 3)
-   - START → VAR_DECLARE(i=0) → WHILE(i<5) → PRINT → ADD(i=i+1)
-
-4. **Arithmetic Operations** (ID: 4)
-   - START → VAR_DECLARE(a=10, b=5) → ADD → SUBTRACT → MULTIPLY → DIVIDE
-
-웹 UI에서 프로젝트를 선택하고 실행하여 결과를 확인할 수 있습니다.
-
-## 사용 예시
-
-### 예시 1: Hello World 프로그램
-
-```json
-// 1. 프로젝트 생성
-POST /api/projects
-{
-  "name": "Hello World",
-  "description": "Simple greeting program"
-}
-// 응답: { "id": 1, "name": "Hello World", ... }
-
-// 2. START 블록 생성
-POST /api/blocks/project/1
-{
-  "blockType": "START",
-  "positionX": 100,
-  "positionY": 100,
-  "order": 1
-}
-// 응답: { "id": 100, ... }
-
-// 3. PRINT 블록 생성
-POST /api/blocks/project/1
-{
-  "blockType": "PRINT",
-  "positionX": 100,
-  "positionY": 200,
-  "order": 2,
-  "message": "Hello World"
-}
-// 응답: { "id": 101, ... }
-
-// 4. START 블록 업데이트 (PRINT 연결)
-PUT /api/blocks/100
-{
-  "blockType": "START",
-  "positionX": 100,
-  "positionY": 100,
-  "order": 1,
-  "nextBlockId": 101
-}
-
-// 5. 프로그램 실행
-POST /api/execution/projects/1/run
-```
-
-### 예시 2: 조건문을 사용한 프로그램
-
-```json
-// 1. 프로젝트 생성
-POST /api/projects
-{ "name": "Conditional Test" }
-// 응답: { "id": 2, ... }
-
-// 2. START 블록 생성
-POST /api/blocks/project/2
-{ "blockType": "START", "positionX": 100, "positionY": 100, "order": 1 }
-// 응답: { "id": 200, ... }
-
-// 3. 변수 선언 블록 생성 (x = 10)
-POST /api/blocks/project/2
-{
-  "blockType": "VAR_DECLARE",
-  "variableName": "x",
-  "initialValue": "10",
-  "positionX": 100,
-  "positionY": 200,
-  "order": 2
-}
-// 응답: { "id": 201, ... }
-
-// 4. IF 조건문 블록 생성
-POST /api/blocks/project/2
-{
-  "blockType": "IF",
-  "conditionExpression": "x > 5",
-  "positionX": 100,
-  "positionY": 300,
-  "order": 3
-}
-// 응답: { "id": 202, ... }
-
-// 5. TRUE 분기 PRINT 블록 생성
-POST /api/blocks/project/2
-{
-  "blockType": "PRINT",
-  "message": "x is greater than 5",
-  "positionX": 200,
-  "positionY": 400,
-  "order": 4
-}
-// 응답: { "id": 203, ... }
-
-// 6. FALSE 분기 PRINT 블록 생성
-POST /api/blocks/project/2
-{
-  "blockType": "PRINT",
-  "message": "x is not greater than 5",
-  "positionX": 50,
-  "positionY": 400,
-  "order": 5
-}
-// 응답: { "id": 204, ... }
-
-// 7. 블록 연결 업데이트
-PUT /api/blocks/200
-{ "blockType": "START", "nextBlockId": 201, ... }
-
-PUT /api/blocks/201
-{ "blockType": "VAR_DECLARE", "variableName": "x", "initialValue": "10", "nextBlockId": 202, ... }
-
-PUT /api/blocks/202
-{ "blockType": "IF", "conditionExpression": "x > 5", "trueBranchId": 203, "falseBranchId": 204, ... }
-
-// 8. 프로그램 실행
-POST /api/execution/projects/2/run
-```
-
-### 예시 3: 반복문과 산술 연산
-
-```json
-// 1. 프로젝트 생성
-POST /api/projects
-{ "name": "Loop Test" }
-// 응답: { "id": 3, ... }
-
-// 2. START 블록 생성
-POST /api/blocks/project/3
-{ "blockType": "START", "positionX": 100, "positionY": 100, "order": 1 }
-// 응답: { "id": 300, ... }
-
-// 3. 변수 선언 블록 생성 (i = 0)
-POST /api/blocks/project/3
-{
-  "blockType": "VAR_DECLARE",
-  "variableName": "i",
-  "initialValue": "0",
-  "positionX": 100,
-  "positionY": 200,
-  "order": 2
-}
-// 응답: { "id": 301, ... }
-
-// 4. WHILE 반복문 블록 생성 (i < 5)
-POST /api/blocks/project/3
-{
-  "blockType": "WHILE",
-  "conditionExpression": "i < 5",
-  "positionX": 100,
-  "positionY": 300,
-  "order": 3
-}
-// 응답: { "id": 302, ... }
-
-// 5. PRINT 블록 생성 (i 값 출력)
-POST /api/blocks/project/3
-{
-  "blockType": "PRINT",
-  "message": "i",
-  "positionX": 200,
-  "positionY": 400,
-  "order": 4
-}
-// 응답: { "id": 303, ... }
-
-// 6. ADD 블록 생성 (i = i + 1)
-POST /api/blocks/project/3
-{
-  "blockType": "ADD",
-  "operand1": "i",
-  "operand2": "1",
-  "resultVariable": "i",
-  "positionX": 200,
-  "positionY": 500,
-  "order": 5
-}
-// 응답: { "id": 304, ... }
-
-// 7. 블록 연결 업데이트
-PUT /api/blocks/300
-{ "blockType": "START", "nextBlockId": 301, ... }
-
-PUT /api/blocks/301
-{ "blockType": "VAR_DECLARE", "variableName": "i", "initialValue": "0", "nextBlockId": 302, ... }
-
-PUT /api/blocks/302
-{ "blockType": "WHILE", "conditionExpression": "i < 5", "trueBranchId": 303, ... }
-
-PUT /api/blocks/303
-{ "blockType": "PRINT", "message": "i", "nextBlockId": 304, ... }
-
-PUT /api/blocks/304
-{ "blockType": "ADD", "operand1": "i", "operand2": "1", "resultVariable": "i", "nextBlockId": 302, ... }
-
-// 8. 프로그램 실행
-POST /api/execution/projects/3/run
-```
-
-## WebSocket 실시간 출력
-
-### 연결 방법
-
-```javascript
-// SockJS + STOMP 사용
-const socket = new SockJS('/ws');
-const stompClient = Stomp.over(socket);
-
-stompClient.connect({}, function(frame) {
-    // 실행 세션 구독
-    stompClient.subscribe('/topic/execution/' + sessionId, function(message) {
-        const output = JSON.parse(message.body);
-        console.log(output);
-    });
-});
-```
-
-### 출력 메시지 형식
-
-```json
-{
-  "type": "PRINT",
-  "data": "Hello World"
-}
-
-{
-  "type": "ADD",
-  "data": "result = 5.0 + 3.0 = 8.0"
-}
-
-{
-  "type": "IF",
-  "data": "Condition: x > 5 = true"
-}
-
-{
-  "type": "COMPLETE",
-  "data": "Execution completed successfully"
-}
-
-{
-  "type": "ERROR",
-  "data": "Execution error: Division by zero"
-}
-```
-
-## 주요 특징
-
-### 1. 객체지향 설계
-- **추상화**: Block 추상 클래스를 통한 공통 인터페이스 정의
-- **상속**: 블록 타입별 특화된 구현
-- **다형성**: execute() 메서드를 통한 다형적 실행
-- **캡슐화**: 각 블록이 자신의 실행 로직을 캡슐화
-
-### 2. MVC 패턴
-- **Model**: JPA Entity로 정의된 도메인 모델
-- **View**: REST API (JSON 응답)
-- **Controller**: Spring REST Controller
-
-### 3. 실행 엔진
-- **ExecutionContext**: 실행 컨텍스트 관리 (변수, 표현식 평가)
-- **단방향 그래프 순회**: START 블록부터 연결 그래프를 따라 실행
-- **분기 지원**: 제어 블록의 조건부 분기 처리
-- **실시간 스트리밍**: WebSocket을 통한 실행 과정 전송
-
-### 4. 확장성
-- 새로운 블록 타입 추가 용이 (Block 상속)
-- 표현식 평가기 확장 가능
-- 다양한 출력 형식 지원
-
-## 데이터베이스 스키마
-
-### blocks 테이블
-```sql
-CREATE TABLE blocks (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    block_type VARCHAR(50),
-    position_x INT,
-    position_y INT,
-    block_order INT,
-    project_id BIGINT,
-    next_block_id BIGINT,
-    FOREIGN KEY (project_id) REFERENCES projects(id)
-);
-```
-
-### projects 테이블
-```sql
-CREATE TABLE projects (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(255) NOT NULL,
-    description VARCHAR(1000),
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP
-);
-```
-
-## 개발 팀
-
-- Team 8
-
-## 라이선스
-
-이 프로젝트는 교육 목적으로 개발되었습니다.
+- DB 커넥션은 `src/main/resources/application-dev.yml`에서 수정하세요.
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- 정적 테스트 페이지: http://localhost:8080/index.html
+
+## 데이터 모델 메모
+- 블록은 JPA JOINED 전략을 사용해 `blocks` + 타입별 테이블에 저장됩니다.
+- 값 블록(리터럴/변수/단항/이항)은 `expression_blocks` 계층 테이블에 저장되며 프로젝트와 연관됩니다.

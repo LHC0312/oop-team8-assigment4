@@ -3,6 +3,10 @@ package team8.execution;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import team8.model.expression.BinaryExpressionBlock;
+import team8.model.expression.LiteralExpressionBlock;
+import team8.model.expression.UnaryExpressionBlock;
+import team8.model.expression.VariableExpressionBlock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -28,14 +32,22 @@ class ExecutionContextTest {
     @Test
     @DisplayName("숫자 표현식 평가 테스트")
     void testEvaluateNumericExpression() {
-        Object result = context.evaluateExpression("42");
+        LiteralExpressionBlock lit = LiteralExpressionBlock.builder()
+                .value("42")
+                .literalType("NUMBER")
+                .build();
+        Object result = context.evaluateExpression(lit);
         assertEquals(42.0, result);
     }
 
     @Test
     @DisplayName("문자열 표현식 평가 테스트")
     void testEvaluateStringExpression() {
-        Object result = context.evaluateExpression("\"Hello World\"");
+        LiteralExpressionBlock lit = LiteralExpressionBlock.builder()
+                .value("Hello World")
+                .literalType("STRING")
+                .build();
+        Object result = context.evaluateExpression(lit);
         assertEquals("Hello World", result);
     }
 
@@ -43,7 +55,10 @@ class ExecutionContextTest {
     @DisplayName("변수 참조 표현식 평가 테스트")
     void testEvaluateVariableReference() {
         context.setVariable("x", 100);
-        Object result = context.evaluateExpression("x");
+        VariableExpressionBlock var = VariableExpressionBlock.builder()
+                .variableName("x")
+                .build();
+        Object result = context.evaluateExpression(var);
         assertEquals(100, result);
     }
 
@@ -52,8 +67,20 @@ class ExecutionContextTest {
     void testEvaluateEqualityCondition() {
         context.setVariable("x", 5);
 
-        assertTrue(context.evaluateCondition("x == 5"));
-        assertFalse(context.evaluateCondition("x == 10"));
+        BinaryExpressionBlock eq = BinaryExpressionBlock.builder()
+                .operator("==")
+                .left(VariableExpressionBlock.builder().variableName("x").build())
+                .right(LiteralExpressionBlock.builder().value("5").literalType("NUMBER").build())
+                .build();
+
+        assertTrue(context.evaluateCondition(eq));
+
+        BinaryExpressionBlock neq = BinaryExpressionBlock.builder()
+                .operator("==")
+                .left(VariableExpressionBlock.builder().variableName("x").build())
+                .right(LiteralExpressionBlock.builder().value("10").literalType("NUMBER").build())
+                .build();
+        assertFalse(context.evaluateCondition(neq));
     }
 
     @Test
@@ -61,8 +88,19 @@ class ExecutionContextTest {
     void testEvaluateGreaterThanCondition() {
         context.setVariable("x", 10);
 
-        assertTrue(context.evaluateCondition("x > 5"));
-        assertFalse(context.evaluateCondition("x > 15"));
+        BinaryExpressionBlock gt = BinaryExpressionBlock.builder()
+                .operator(">")
+                .left(VariableExpressionBlock.builder().variableName("x").build())
+                .right(LiteralExpressionBlock.builder().value("5").literalType("NUMBER").build())
+                .build();
+        assertTrue(context.evaluateCondition(gt));
+
+        BinaryExpressionBlock gtFalse = BinaryExpressionBlock.builder()
+                .operator(">")
+                .left(VariableExpressionBlock.builder().variableName("x").build())
+                .right(LiteralExpressionBlock.builder().value("15").literalType("NUMBER").build())
+                .build();
+        assertFalse(context.evaluateCondition(gtFalse));
     }
 
     @Test
@@ -70,8 +108,19 @@ class ExecutionContextTest {
     void testEvaluateLessThanCondition() {
         context.setVariable("x", 10);
 
-        assertTrue(context.evaluateCondition("x < 15"));
-        assertFalse(context.evaluateCondition("x < 5"));
+        BinaryExpressionBlock lt = BinaryExpressionBlock.builder()
+                .operator("<")
+                .left(VariableExpressionBlock.builder().variableName("x").build())
+                .right(LiteralExpressionBlock.builder().value("15").literalType("NUMBER").build())
+                .build();
+        assertTrue(context.evaluateCondition(lt));
+
+        BinaryExpressionBlock ltFalse = BinaryExpressionBlock.builder()
+                .operator("<")
+                .left(VariableExpressionBlock.builder().variableName("x").build())
+                .right(LiteralExpressionBlock.builder().value("5").literalType("NUMBER").build())
+                .build();
+        assertFalse(context.evaluateCondition(ltFalse));
     }
 
     @Test
@@ -85,17 +134,25 @@ class ExecutionContextTest {
     }
 
     @Test
-    @DisplayName("null 또는 빈 표현식 평가 테스트")
-    void testEvaluateNullOrEmptyExpression() {
-        assertNull(context.evaluateExpression(null));
-        assertNull(context.evaluateExpression(""));
-        assertNull(context.evaluateExpression("   "));
+    @DisplayName("문자열 + 문자열은 연결된다")
+    void testStringConcatenation() {
+        BinaryExpressionBlock expr = BinaryExpressionBlock.builder()
+                .operator("+")
+                .left(LiteralExpressionBlock.builder().value("a").literalType("STRING").build())
+                .right(LiteralExpressionBlock.builder().value("b").literalType("STRING").build())
+                .build();
+        Object result = context.evaluateExpression(expr);
+        assertEquals("ab", result);
     }
 
     @Test
-    @DisplayName("null 조건 평가 테스트")
-    void testEvaluateNullCondition() {
-        assertFalse(context.evaluateCondition(null));
-        assertFalse(context.evaluateCondition(""));
+    @DisplayName("문자열 + 숫자는 예외를 던진다")
+    void testStringPlusNumberThrows() {
+        BinaryExpressionBlock expr = BinaryExpressionBlock.builder()
+                .operator("+")
+                .left(LiteralExpressionBlock.builder().value("a").literalType("STRING").build())
+                .right(LiteralExpressionBlock.builder().value("1").literalType("NUMBER").build())
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> context.evaluateExpression(expr));
     }
 }

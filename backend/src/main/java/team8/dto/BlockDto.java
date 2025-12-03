@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import team8.dto.ValueDto;
 
 @Data
 @NoArgsConstructor
@@ -19,25 +20,23 @@ public class BlockDto {
     private Integer order;
     private Long nextBlockId;
 
-    private String conditionExpression;
     private Long trueBranchId;
     private Long falseBranchId;
 
-    private String initExpression;
-    private String incrementExpression;
+    private ValueDto condition;
+    private ValueDto init;
+    private ValueDto increment;
 
-    private String message;
+    private ValueDto message;
 
-    private String shape;
-    private String color;
-    private Integer size;
-
-    private String operand1;
-    private String operand2;
+    private ValueDto operand1;
+    private ValueDto operand2;
     private String resultVariable;
+    private Long resultVariableId;
 
     private String variableName;
     private String variableType;
-    private String initialValue;
-    private String valueExpression;
+    private Long variableId;
+    private ValueDto initial;
+    private ValueDto value;
 }

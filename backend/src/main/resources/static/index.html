@@ -6,302 +6,377 @@
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700&family=DM+Mono:wght@400&display=swap');
+
+        :root {
+            --bg: #f5f7fb;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --text: #111827;
+            --muted: #6b7280;
+            --accent: #2563eb;
+            --accent-2: #14b8a6;
+            --badge: #eef2ff;
+            --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
         }
+
+        * { box-sizing: border-box; }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            font-family: 'Inter', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+            color: var(--text);
         }
 
-        .container {
-            max-width: 1400px;
+        .page {
+            max-width: 1280px;
             margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
+            padding: 28px 22px 40px;
         }
 
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px 20px;
+            box-shadow: var(--shadow);
         }
 
         header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
+            margin: 0 0 6px;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
         }
 
         header p {
-            font-size: 1.1em;
-            opacity: 0.9;
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
         }
 
-        .main-content {
+        .layout {
             display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 20px;
-            padding: 20px;
+            grid-template-columns: 320px 1fr;
+            gap: 16px;
+            margin-top: 16px;
         }
 
-        .sidebar {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: var(--shadow);
         }
 
-        .content-area {
+        .panel h2 {
+            margin: 0 0 12px;
+            font-size: 17px;
+            font-weight: 700;
             display: flex;
-            flex-direction: column;
-            gap: 20px;
+            align-items: center;
+            gap: 8px;
         }
 
-        .section {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-        }
-
-        .section-title {
-            font-size: 1.5em;
-            margin-bottom: 15px;
-            color: #333;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
+        .panel h2 span {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 7px;
+            background: #ebf2ff;
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 12px;
         }
 
         .project-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            max-height: 600px;
+            gap: 8px;
+            max-height: 700px;
             overflow-y: auto;
+            padding-right: 4px;
         }
 
-        .project-item {
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .project-item:hover {
-            border-color: #667eea;
-            transform: translateX(5px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-        }
-
-        .project-item.selected {
-            border-color: #667eea;
-            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-        }
-
-        .project-item h3 {
-            color: #667eea;
-            margin-bottom: 5px;
-        }
-
-        .project-item p {
-            color: #666;
-            font-size: 0.9em;
-        }
-
-        .blocks-table {
+        .project-card {
             width: 100%;
-            border-collapse: collapse;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        .blocks-table th,
-        .blocks-table td {
-            padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #e0e0e0;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            background: #fbfdff;
+            color: var(--text);
+            cursor: pointer;
+            transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
         }
 
-        .blocks-table th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        .project-card:hover {
+            border-color: #c7d2fe;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+            transform: translateY(-1px);
+        }
+
+        .project-card.selected {
+            border-color: var(--accent);
+            box-shadow: 0 10px 26px rgba(37, 99, 235, 0.16);
+            background: #eef2ff;
+        }
+
+        .project-card h3 {
+            margin: 0 0 6px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .project-card p {
+            margin: 0 0 8px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: var(--badge);
+            color: #4338ca;
             font-weight: 600;
+            font-size: 12px;
         }
 
-        .blocks-table tr:hover {
-            background: #f5f5f5;
+        .blocks-area {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 12px;
         }
 
-        .block-type {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: 600;
-            color: white;
+        .blocks-board {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            min-height: 320px;
+            background: #f9fafb;
         }
 
-        .block-type.START { background-color: #2196F3; }
-        .block-type.PRINT { background-color: #9C27B0; }
-        .block-type.ALERT { background-color: #FFC107; color: #333; }
-        .block-type.DRAW { background-color: #4CAF50; }
-        .block-type.ADD,
-        .block-type.SUBTRACT,
-        .block-type.MULTIPLY,
-        .block-type.DIVIDE { background-color: #FF9800; }
-        .block-type.VAR_DECLARE,
-        .block-type.VAR_ASSIGN { background-color: #8BC34A; }
-        .block-type.IF,
-        .block-type.FOR,
-        .block-type.WHILE { background-color: #E91E63; }
-
-        #output {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 20px;
-            min-height: 300px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            border-radius: 8px;
-            white-space: pre-wrap;
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
-        .message {
-            margin: 5px 0;
-            padding: 8px 12px;
-            border-radius: 4px;
-            border-left: 4px solid;
+        .block-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            background: var(--card);
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
         }
 
-        .message.START { border-color: #2196F3; background-color: #e3f2fd20; }
-        .message.PRINT { border-color: #9C27B0; background-color: #f3e5f520; }
-        .message.ALERT { border-color: #FFC107; background-color: #fff9c420; }
-        .message.DRAW { border-color: #4CAF50; background-color: #e8f5e920; }
-        .message.ADD,
-        .message.SUBTRACT,
-        .message.MULTIPLY,
-        .message.DIVIDE { border-color: #FF9800; background-color: #ffe0b220; }
-        .message.VAR_DECLARE,
-        .message.VAR_ASSIGN { border-color: #8BC34A; background-color: #f1f8e920; }
-        .message.IF,
-        .message.FOR,
-        .message.WHILE { border-color: #E91E63; background-color: #e1bee720; }
-        .message.ERROR { border-color: #f44336; background-color: #ffcdd220; }
-        .message.COMPLETE { border-color: #4CAF50; background-color: #c8e6c920; font-weight: bold; }
-        .message.INFO { border-color: #2196F3; background-color: #e3f2fd20; }
+        .block-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .block-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+            background: var(--badge);
+            color: #312e81;
+        }
+
+        .order-pill {
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--muted);
+            background: #fff;
+        }
+
+        .details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .detail {
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .detail strong {
+            display: block;
+            color: var(--text);
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
 
         button {
-            padding: 12px 24px;
-            font-size: 16px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            border-radius: 10px;
+            padding: 9px 14px;
+            font-weight: 700;
             cursor: pointer;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-weight: 600;
+            transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
         }
 
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        button.primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        button.secondary {
+            background: #f9fafb;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            border-color: var(--accent);
         }
 
         button:disabled {
-            background: #ccc;
+            opacity: 0.45;
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
         }
 
-        .action-buttons {
-            display: flex;
+        .output {
+            background: #0f172a;
+            color: #e5e7eb;
+            border-radius: 12px;
+            padding: 12px;
+            min-height: 240px;
+            max-height: 380px;
+            overflow-y: auto;
+            font-family: 'DM Mono', 'Menlo', monospace;
+            border: 1px solid #1f2937;
+        }
+
+        .log-entry {
+            display: grid;
+            grid-template-columns: auto 1fr;
             gap: 10px;
-            margin-bottom: 15px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            align-items: center;
         }
 
-        .empty-state {
+        .log-entry .type {
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 11px;
+            color: #0f172a;
+            background: #dbeafe;
+        }
+
+        .log-entry .text {
+            word-break: break-word;
+        }
+
+        .empty-state, .loading {
             text-align: center;
-            padding: 40px;
-            color: #999;
+            padding: 26px 10px;
+            color: var(--muted);
         }
 
-        .empty-state i {
-            font-size: 3em;
-            margin-bottom: 15px;
-            display: block;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-        }
-
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+        .loading .spinner {
+            margin: 0 auto 10px;
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid var(--accent);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
         }
 
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        @media (max-width: 1024px) {
+            .layout { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="page">
         <header>
-            <h1>Block Coding Application</h1>
-            <p>Visual Programming Platform - Create, View, and Execute Block Programs</p>
+            <h1>Block Coding Console</h1>
+            <p>프로젝트 선택 → 블록 흐름 확인 → 실행/트레이스 로그 확인</p>
         </header>
 
-        <div class="main-content">
-            <div class="sidebar">
-                <h2 class="section-title">Projects</h2>
+        <div class="layout">
+            <aside class="panel">
+                <h2><span>1</span>Projects</h2>
                 <div id="projectList" class="project-list">
                     <div class="loading">
                         <div class="spinner"></div>
                         <p>Loading projects...</p>
                     </div>
                 </div>
-            </div>
+            </aside>
 
-            <div class="content-area">
-                <div class="section">
-                    <h2 class="section-title">Blocks</h2>
-                    <div id="blocksSection">
+            <main class="panel blocks-area">
+                <div>
+                    <h2><span>2</span>Blocks</h2>
+                    <div id="blocksSection" class="blocks-board">
                         <div class="empty-state">
-                            <i>📦</i>
-                            <p>Select a project to view its blocks</p>
+                            <p>프로젝트를 선택하면 블록 흐름이 나타납니다.</p>
                         </div>
                     </div>
                 </div>
 
-                <div class="section">
-                    <h2 class="section-title">Execution Output</h2>
-                    <div class="action-buttons">
-                        <button id="runBtn" onclick="runProject()" disabled>▶ Run Project</button>
-                        <button onclick="clearOutput()">🗑 Clear Output</button>
+                <div>
+                    <div class="controls">
+                        <button id="runBtn" class="primary" onclick="runProject(false)" disabled>▶ Run</button>
+                        <button id="runTraceBtn" onclick="runProject(true)" disabled class="secondary">🔍 Trace Run</button>
+                        <button onclick="clearOutput()" class="secondary">🗑 Clear Output</button>
                     </div>
-                    <div id="output"></div>
                 </div>
-            </div>
+
+                <div>
+                    <h2><span>3</span>Execution Output</h2>
+                    <div id="output" class="output"></div>
+                </div>
+            </main>
         </div>
     </div>
 
@@ -310,10 +385,7 @@
         let currentSessionId = null;
         let selectedProjectId = null;
 
-        // Load projects on page load
-        window.onload = function() {
-            loadProjects();
-        };
+        window.onload = () => loadProjects();
 
         function loadProjects() {
             fetch('/api/projects')
@@ -325,7 +397,7 @@
                     console.error('Error loading projects:', error);
                     document.getElementById('projectList').innerHTML =
                         '<div class="empty-state"><i>❌</i><p>Failed to load projects</p></div>';
-                });
+            });
         }
 
         function displayProjects(projects) {
@@ -333,33 +405,34 @@
 
             if (projects.length === 0) {
                 projectList.innerHTML =
-                    '<div class="empty-state"><i>📭</i><p>No projects found</p></div>';
+                    '<div class="empty-state"><p>프로젝트가 없습니다.</p></div>';
                 return;
             }
 
             projectList.innerHTML = projects.map(project => `
-                <div class="project-item" onclick="selectProject(${project.id})">
+                <button class="project-card" data-id="${project.id}" onclick="selectProject(event, ${project.id})">
                     <h3>${escapeHtml(project.name)}</h3>
                     <p>${escapeHtml(project.description || 'No description')}</p>
-                    <small style="color: #999;">ID: ${project.id}</small>
-                </div>
+                    <span class="chip">ID: ${project.id}</span>
+                </button>
             `).join('');
         }
 
-        function selectProject(projectId) {
+        function selectProject(event, projectId) {
             selectedProjectId = projectId;
 
-            // Update UI
-            document.querySelectorAll('.project-item').forEach(item => {
-                item.classList.remove('selected');
+            document.querySelectorAll('.project-card').forEach(item => {
+                item.classList.toggle('selected', item.dataset.id === String(projectId));
             });
-            event.currentTarget.classList.add('selected');
 
-            // Enable run button
-            document.getElementById('runBtn').disabled = false;
+            setRunButtonsDisabled(false);
 
-            // Load blocks
             loadBlocks(projectId);
+        }
+
+        function setRunButtonsDisabled(disabled) {
+            document.getElementById('runBtn').disabled = disabled;
+            document.getElementById('runTraceBtn').disabled = disabled;
         }
 
         function loadBlocks(projectId) {
@@ -374,7 +447,7 @@
                 .catch(error => {
                     console.error('Error loading blocks:', error);
                     blocksSection.innerHTML =
-                        '<div class="empty-state"><i>❌</i><p>Failed to load blocks</p></div>';
+                        '<div class="empty-state"><p>블록을 불러올 수 없습니다.</p></div>';
                 });
         }
 
@@ -383,48 +456,63 @@
 
             if (blocks.length === 0) {
                 blocksSection.innerHTML =
-                    '<div class="empty-state"><i>📭</i><p>No blocks in this project</p></div>';
+                    '<div class="empty-state"><p>이 프로젝트에는 블록이 없습니다.</p></div>';
                 return;
             }
 
-            const table = `
-                <table class="blocks-table">
-                    <thead>
-                        <tr>
-                            <th>Order</th>
-                            <th>Type</th>
-                            <th>Details</th>
-                            <th>Next Block</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${blocks.map(block => `
-                            <tr>
-                                <td>${block.order}</td>
-                                <td><span class="block-type ${block.blockType}">${block.blockType}</span></td>
-                                <td>${getBlockDetails(block)}</td>
-                                <td>${block.nextBlockId || block.trueBranchId || '-'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+            const timeline = `
+                <div class="timeline">
+                    ${blocks.map(block => `
+                        <div class="block-card">
+                            <div class="block-head">
+                                <div class="block-meta">
+                                    <span class="badge ${block.blockType}">${block.blockType}</span>
+                                    <span class="order-pill">Order ${block.order ?? '-'}</span>
+                                    <span class="chip">Next: ${block.nextBlockId ?? block.trueBranchId ?? '-'}</span>
+                                </div>
+                                <span class="chip">ID: ${block.id}</span>
+                            </div>
+                            <div class="details">
+                                ${getBlockDetails(block)}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
             `;
 
-            blocksSection.innerHTML = table;
+            blocksSection.innerHTML = timeline;
         }
 
         function getBlockDetails(block) {
             const details = [];
 
-            if (block.message) details.push(`Message: "${escapeHtml(block.message)}"`);
-            if (block.conditionExpression) details.push(`Condition: ${escapeHtml(block.conditionExpression)}`);
-            if (block.variableName) details.push(`Variable: ${escapeHtml(block.variableName)}`);
-            if (block.initialValue) details.push(`Value: ${escapeHtml(block.initialValue)}`);
-            if (block.operand1) details.push(`${escapeHtml(block.operand1)} op ${escapeHtml(block.operand2)} → ${escapeHtml(block.resultVariable)}`);
-            if (block.trueBranchId) details.push(`True→${block.trueBranchId}`);
-            if (block.falseBranchId) details.push(`False→${block.falseBranchId}`);
+            if (block.message) details.push(detailItem('Message', formatValue(block.message)));
+            if (block.condition) details.push(detailItem('Condition', formatValue(block.condition)));
+            if (block.variableName) details.push(detailItem('Variable', `${escapeHtml(block.variableName)} (id:${block.variableId ?? '-'}, type:${block.variableType ?? '-'})`));
+            if (block.initial) details.push(detailItem('Initial', formatValue(block.initial)));
+            if (block.value) details.push(detailItem('Value', formatValue(block.value)));
+            if (block.operand1 || block.resultVariable) {
+                details.push(detailItem('Operands', `${formatValue(block.operand1)} , ${formatValue(block.operand2 || '')}`));
+                details.push(detailItem('Result', `${escapeHtml(block.resultVariable || '')} (id:${block.resultVariableId ?? '-'})`));
+            }
+            if (block.trueBranchId) details.push(detailItem('True Branch', block.trueBranchId));
+            if (block.falseBranchId) details.push(detailItem('False Branch', block.falseBranchId));
 
-            return details.length > 0 ? details.join(', ') : '-';
+            return details.length > 0 ? details.join('') : detailItem('Info', 'No extra data');
+        }
+
+        function detailItem(label, value) {
+            return `<div class="detail"><strong>${escapeHtml(label)}</strong>${escapeHtml(String(value))}</div>`;
+        }
+
+        function formatValue(valueDto) {
+            if (!valueDto) return '-';
+            if (typeof valueDto === 'string') return valueDto;
+            try {
+                return JSON.stringify(valueDto);
+            } catch (_) {
+                return String(valueDto);
+            }
         }
 
         function connect(sessionId) {
@@ -441,16 +529,19 @@
             });
         }
 
-        function runProject() {
+        function runProject(traceEnabled) {
             if (!selectedProjectId) {
                 alert('Please select a project first');
                 return;
             }
 
             clearOutput();
-            document.getElementById('runBtn').disabled = true;
+            setRunButtonsDisabled(true);
 
-            fetch('/api/execution/projects/' + selectedProjectId + '/run', {
+            const url = '/api/execution/projects/' + selectedProjectId + '/run' +
+                    (traceEnabled ? '?trace=true' : '');
+
+            fetch(url, {
                 method: 'POST'
             })
             .then(response => response.json())
@@ -458,28 +549,31 @@
                 currentSessionId = data.sessionId;
                 console.log('Session ID:', currentSessionId);
                 connect(currentSessionId);
-                showOutput({type: 'INFO', data: 'Execution started for project ID: ' + selectedProjectId});
+                showOutput({type: 'INFO', data: (traceEnabled ? 'Trace' : 'Run') + ' started for project ID: ' + selectedProjectId});
             })
             .catch(error => {
                 console.error('Error:', error);
                 showOutput({type: 'ERROR', data: 'Failed to start execution: ' + error.message});
-                document.getElementById('runBtn').disabled = false;
+                setRunButtonsDisabled(false);
             });
 
-            // Re-enable button after 3 seconds
             setTimeout(() => {
-                document.getElementById('runBtn').disabled = false;
+                setRunButtonsDisabled(false);
             }, 3000);
         }
 
         function showOutput(message) {
             const output = document.getElementById('output');
             const div = document.createElement('div');
-            div.className = 'message ' + message.type;
+            div.className = 'log-entry';
 
             const timestamp = new Date().toLocaleTimeString();
             const dataStr = typeof message.data === 'string' ? message.data : JSON.stringify(message.data);
-            div.textContent = `[${timestamp}] [${message.type}] ${dataStr}`;
+
+            div.innerHTML = `
+                <span class="type ${message.type}">${escapeHtml(message.type)}</span>
+                <div class="text">[${timestamp}] ${escapeHtml(dataStr)}</div>
+            `;
 
             output.appendChild(div);
             output.scrollTop = output.scrollHeight;
