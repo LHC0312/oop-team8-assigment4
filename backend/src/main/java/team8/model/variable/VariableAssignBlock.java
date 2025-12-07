@@ -42,7 +42,8 @@ public class VariableAssignBlock extends VariableBlock {
         }
         String type = context.getVariableType(getVariableId());
         if (type == null) {
-            throw new IllegalStateException("Variable type not declared for: " + getVariableName());
+            String identifier = getVariableName() != null ? getVariableName() : String.valueOf(getVariableId());
+            throw new IllegalStateException("Variable type not declared for: " + identifier);
         }
         Object coerced = coerceToType(value, type);
         context.setVariable(getVariableId(), coerced);

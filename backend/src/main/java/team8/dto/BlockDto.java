@@ -29,11 +29,6 @@ public class BlockDto {
 
     private ValueDto message;
 
-    private ValueDto operand1;
-    private ValueDto operand2;
-    private String resultVariable;
-    private Long resultVariableId;
-
     private String variableName;
     private String variableType;
     private Long variableId;

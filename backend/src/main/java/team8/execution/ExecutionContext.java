@@ -1,15 +1,16 @@
 package team8.execution;
 
 import lombok.Getter;
+import org.hibernate.proxy.HibernateProxy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import team8.model.expression.BinaryExpressionBlock;
 import team8.model.expression.ExpressionBlock;
 import team8.model.expression.LiteralExpressionBlock;
-import team8.model.expression.UnaryExpressionBlock;
 import team8.model.expression.VariableExpressionBlock;
+import team8.repository.ExpressionRepository;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Getter
 public class ExecutionContext {
@@ -22,17 +23,26 @@ public class ExecutionContext {
     private final String sessionId;
     private final boolean debugMode;
     private final boolean traceEnabled;
+    private final ExpressionRepository expressionRepository;
+    private final Map<Long, ExpressionBlock> expressionCache = new HashMap<>();
     private boolean stopped = false;
 
     public ExecutionContext(SimpMessagingTemplate messagingTemplate, String sessionId) {
-        this(messagingTemplate, sessionId, false, false);
+        this(messagingTemplate, sessionId, false, false, null);
     }
 
     public ExecutionContext(SimpMessagingTemplate messagingTemplate, String sessionId, boolean debugMode, boolean traceEnabled) {
+        this(messagingTemplate, sessionId, debugMode, traceEnabled, null);
+    }
+
+    public ExecutionContext(SimpMessagingTemplate messagingTemplate, String sessionId,
+                            boolean debugMode, boolean traceEnabled,
+                            ExpressionRepository expressionRepository) {
         this.messagingTemplate = messagingTemplate;
         this.sessionId = sessionId;
         this.debugMode = debugMode;
         this.traceEnabled = traceEnabled;
+        this.expressionRepository = expressionRepository;
     }
 
     public void setVariable(Long variableId, Object value) {
@@ -121,51 +131,11 @@ public class ExecutionContext {
         if (expressionBlock == null) {
             return null;
         }
-        if (expressionBlock instanceof LiteralExpressionBlock literal) {
-            return parseLiteral(literal);
+        if (expressionBlock instanceof HibernateProxy proxy) {
+            expressionBlock = unwrapProxy(proxy);
         }
-        if (expressionBlock instanceof VariableExpressionBlock variable) {
-            if (variable.getVariableId() != null) {
-                return variablesById.get(variable.getVariableId());
-            }
-            if (variable.getVariableName() != null) {
-                for (Map.Entry<Long, String> entry : variableNamesById.entrySet()) {
-                    if (variable.getVariableName().equals(entry.getValue())) {
-                        return variablesById.get(entry.getKey());
-                    }
-                }
-            }
-            return null;
-        }
-        if (expressionBlock instanceof UnaryExpressionBlock unary) {
-            Object operand = evaluateExpression(unary.getOperand());
-            return switch (unary.getOperator()) {
-                case "-" -> -toDouble(operand, true);
-                case "!" -> !toBoolean(operand);
-                default -> operand;
-            };
-        }
-        if (expressionBlock instanceof BinaryExpressionBlock binary) {
-            Object left = evaluateExpression(binary.getLeft());
-            Object right = evaluateExpression(binary.getRight());
-            return switch (binary.getOperator()) {
-                case "+" -> add(left, right);
-                case "-" -> subtract(left, right);
-                case "*" -> multiply(left, right);
-                case "/" -> divide(left, right);
-                case "%" -> mod(left, right);
-                case "==" -> equalsStrict(left, right);
-                case "!=" -> !equalsStrict(left, right);
-                case ">" -> compareNumeric(left, right) > 0;
-                case "<" -> compareNumeric(left, right) < 0;
-                case ">=" -> compareNumeric(left, right) >= 0;
-                case "<=" -> compareNumeric(left, right) <= 0;
-                case "&&" -> toBoolean(left) && toBoolean(right);
-                case "||" -> toBoolean(left) || toBoolean(right);
-                default -> throw new IllegalArgumentException("Unsupported operator: " + binary.getOperator());
-            };
-        }
-        return null;
+        cacheExpression(expressionBlock);
+        return expressionBlock.evaluate(this);
     }
 
     public boolean evaluateCondition(ExpressionBlock expressionBlock) {
@@ -178,7 +148,36 @@ public class ExecutionContext {
         }
         return toBoolean(result);
     }
-    private Object parseLiteral(LiteralExpressionBlock literal) {
+
+    /**
+     * 표현식 블록을 문자열로 평가한다.
+     * PRINT 등 출력용으로 사용하며, 값이 null이면 빈 문자열을 반환하고
+     * '+' 연산은 문자열 연결로 처리한다.
+     */
+    public String evaluateExpressionAsString(ExpressionBlock expressionBlock) {
+        if (expressionBlock == null) {
+            return "";
+        }
+        if (expressionBlock instanceof HibernateProxy proxy) {
+            expressionBlock = unwrapProxy(proxy);
+        }
+        cacheExpression(expressionBlock);
+        return expressionBlock.evaluateAsString(this);
+    }
+
+    private ExpressionBlock unwrapProxy(HibernateProxy proxy) {
+        var initializer = proxy.getHibernateLazyInitializer();
+        if (!initializer.isUninitialized()) {
+            return (ExpressionBlock) initializer.getImplementation();
+        }
+        Object identifier = initializer.getIdentifier();
+        if (identifier instanceof Long id && expressionRepository != null) {
+            return loadExpressionById(id);
+        }
+        return (ExpressionBlock) initializer.getImplementation();
+    }
+
+    public Object parseLiteral(LiteralExpressionBlock literal) {
         if (literal == null) {
             return null;
         }
@@ -201,9 +200,39 @@ public class ExecutionContext {
         return value;
     }
 
+    public Object applyUnary(String operator, Object operand) {
+        return switch (operator) {
+            case "-" -> -toDouble(operand, true);
+            case "!" -> !toBoolean(operand);
+            default -> operand;
+        };
+    }
+
+    public Object applyBinary(String operator, Object left, Object right) {
+        return switch (operator) {
+            case "+" -> add(left, right);
+            case "-" -> subtract(left, right);
+            case "*" -> multiply(left, right);
+            case "/" -> divide(left, right);
+            case "%" -> mod(left, right);
+            case "==" -> equalsStrict(left, right);
+            case "!=" -> !equalsStrict(left, right);
+            case ">" -> compareNumeric(left, right) > 0;
+            case "<" -> compareNumeric(left, right) < 0;
+            case ">=" -> compareNumeric(left, right) >= 0;
+            case "<=" -> compareNumeric(left, right) <= 0;
+            case "&&" -> toBoolean(left) && toBoolean(right);
+            case "||" -> toBoolean(left) || toBoolean(right);
+            default -> throw new IllegalArgumentException("Unsupported operator: " + operator);
+        };
+    }
+
     private boolean equalsStrict(Object left, Object right) {
         if (left == null || right == null) {
             return left == right;
+        }
+        if (left instanceof Number && right instanceof Number) {
+            return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue()) == 0;
         }
         if (left.getClass() != right.getClass()) {
             throw new IllegalArgumentException("Cannot compare different types: " + left.getClass().getSimpleName() + " vs " + right.getClass().getSimpleName());
@@ -293,5 +322,68 @@ public class ExecutionContext {
 
     private String typeName(Object value) {
         return value == null ? "null" : value.getClass().getSimpleName();
+    }
+
+    public Object resolveVariableValue(VariableExpressionBlock variable) {
+        if (variable.getVariableId() != null) {
+            if (!variablesById.containsKey(variable.getVariableId())) {
+                Map<String, Object> trace = new HashMap<>();
+                trace.put("reason", "variable_value_missing");
+                trace.put("variableId", variable.getVariableId());
+                if (variable.getVariableName() != null) {
+                    trace.put("variableName", variable.getVariableName());
+                }
+                sendTrace("ERROR", trace);
+                throw new IllegalStateException("Variable value not set for id: " + variable.getVariableId() +
+                        (variable.getVariableName() != null ? " (" + variable.getVariableName() + ")" : ""));
+            }
+            return variablesById.get(variable.getVariableId());
+        }
+        if (variable.getVariableName() != null) {
+            Long id = variableIdByName.get(variable.getVariableName());
+            if (id == null) {
+                Map<String, Object> trace = new HashMap<>();
+                trace.put("reason", "unknown_variable_name");
+                trace.put("variableName", variable.getVariableName());
+                sendTrace("ERROR", trace);
+                throw new IllegalStateException("Unknown variable name: " + variable.getVariableName());
+            }
+            if (!variablesById.containsKey(id)) {
+                Map<String, Object> trace = new HashMap<>();
+                trace.put("reason", "variable_value_missing");
+                trace.put("variableId", id);
+                trace.put("variableName", variable.getVariableName());
+                sendTrace("ERROR", trace);
+                throw new IllegalStateException("Variable value not set for name: " + variable.getVariableName());
+            }
+            return variablesById.get(id);
+        }
+        sendTrace("ERROR", Map.of(
+                "reason", "variable_reference_missing_id_and_name"
+        ));
+        throw new IllegalStateException("Variable reference requires id or name");
+    }
+
+    public ExpressionBlock loadExpressionById(Long expressionId) {
+        if (expressionId == null) {
+            return null;
+        }
+        ExpressionBlock cached = expressionCache.get(expressionId);
+        if (cached != null) {
+            return cached;
+        }
+        if (expressionRepository == null) {
+            throw new IllegalStateException("Expression repository is not configured but is required to resolve expression id: " + expressionId);
+        }
+        Optional<ExpressionBlock> found = expressionRepository.findById(expressionId);
+        ExpressionBlock expressionBlock = found.orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
+        cacheExpression(expressionBlock);
+        return expressionBlock;
+    }
+
+    public void cacheExpression(ExpressionBlock expressionBlock) {
+        if (expressionBlock != null && expressionBlock.getId() != null) {
+            expressionCache.putIfAbsent(expressionBlock.getId(), expressionBlock);
+        }
     }
 }

@@ -1,6 +1,7 @@
 package team8.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,7 +9,6 @@ import org.hibernate.Hibernate;
 import team8.execution.ExecutionContext;
 import team8.execution.ExecutionResult;
 import team8.model.Block;
-import team8.model.arithmetic.ArithmeticBlock;
 import team8.model.control.ControlBlock;
 import team8.model.control.ForBlock;
 import team8.model.control.WhileBlock;
@@ -20,6 +20,7 @@ import team8.model.variable.VariableAssignBlock;
 import team8.model.variable.VariableDeclareBlock;
 import team8.repository.BlockRepository;
 import team8.repository.ProjectRepository;
+import team8.repository.ExpressionRepository;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,10 +35,12 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BlockExecutionService {
 
     private final BlockRepository blockRepository;
     private final ProjectRepository projectRepository;
+    private final ExpressionRepository expressionRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final Map<String, ExecutionSession> sessions = new ConcurrentHashMap<>();
 
@@ -67,7 +70,7 @@ public class BlockExecutionService {
 
         String sessionId = UUID.randomUUID().toString();
         Map<Long, Long> fallbackConnections = buildFallbackConnections(blockMap);
-        ExecutionContext context = new ExecutionContext(messagingTemplate, sessionId, debugMode, traceEnabled);
+        ExecutionContext context = new ExecutionContext(messagingTemplate, sessionId, debugMode, traceEnabled, expressionRepository);
         ExecutionSession session = new ExecutionSession(sessionId, context, blockMap, fallbackConnections);
         sessions.put(sessionId, session);
 
@@ -131,6 +134,7 @@ public class BlockExecutionService {
                 session.context.sendOutput("COMPLETE", "Execution completed successfully");
             }
         } catch (Exception e) {
+            log.error("Execution error in session {}: {}", session.sessionId, e.getMessage(), e);
             session.context.sendOutput("ERROR", "Execution error: " + e.getMessage());
         } finally {
             sessions.remove(session.sessionId);
@@ -154,7 +158,8 @@ public class BlockExecutionService {
 
             session.context.sendTrace("TRACE", Map.of(
                     "blockId", currentBlock.getId(),
-                    "blockType", currentBlock.getBlockType()
+                    "blockType", currentBlock.getBlockType(),
+                    "variables", session.context.getVariablesSnapshot()
             ));
 
             waitForStepIfNeeded(session, currentBlock);
@@ -163,7 +168,15 @@ public class BlockExecutionService {
                 break;
             }
 
-            ExecutionResult result = currentBlock.execute(session.context);
+            ExecutionResult result;
+            try {
+                result = currentBlock.execute(session.context);
+            } catch (Exception e) {
+                log.error("Block execution failed. sessionId={}, blockId={}, blockType={}", session.sessionId,
+                        currentBlock.getId(), currentBlock.getBlockType(), e);
+                session.context.sendOutput("ERROR", "Block " + currentBlock.getId() + " (" + currentBlock.getBlockType() + ") error: " + e.getMessage());
+                break;
+            }
 
             Long nextBlockId = result.getNextBlockId();
             if (nextBlockId == null) {
@@ -274,10 +287,7 @@ public class BlockExecutionService {
                 }
             }
 
-            if (block instanceof ArithmeticBlock arithmetic) {
-                initializeExpression(arithmetic.getOperand1Block(), visited);
-                initializeExpression(arithmetic.getOperand2Block(), visited);
-            } else if (block instanceof VariableDeclareBlock declareBlock) {
+            if (block instanceof VariableDeclareBlock declareBlock) {
                 initializeExpression(declareBlock.getInitialExpressionBlock(), visited);
             } else if (block instanceof VariableAssignBlock assignBlock) {
                 initializeExpression(assignBlock.getValueExpressionBlock(), visited);

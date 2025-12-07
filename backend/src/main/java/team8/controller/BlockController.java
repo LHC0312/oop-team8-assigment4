@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import team8.dto.BlockConnectRequest;
 import team8.dto.BlockCreateRequest;
 import team8.dto.BlockDto;
 import team8.service.BlockService;
@@ -50,6 +51,14 @@ public class BlockController {
             @Parameter(description = "블록 ID") @PathVariable Long id,
             @RequestBody BlockCreateRequest request) {
         return ResponseEntity.ok(blockService.updateBlock(id, request));
+    }
+
+    @PostMapping("/project/{projectId}/connect")
+    @Operation(summary = "블록 연결 갱신", description = "next/true/false 브랜치를 한번에 갱신합니다.")
+    public ResponseEntity<List<BlockDto>> connectBlocks(
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId,
+            @RequestBody List<BlockConnectRequest> requests) {
+        return ResponseEntity.ok(blockService.connectBlocks(projectId, requests));
     }
 
     @DeleteMapping("/{id}")

@@ -2,11 +2,9 @@ package team8.model;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import team8.execution.ExecutionContext;
 import team8.execution.ExecutionResult;
-import team8.model.arithmetic.AddBlock;
 import team8.model.control.IfBlock;
 import team8.model.output.PrintBlock;
 import team8.model.start.StartBlock;
@@ -14,7 +12,6 @@ import team8.model.variable.VariableDeclareBlock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@Disabled("Pending rewrite for ValueBlock refactor")
 class BlockExecutionTest {
 
     private ExecutionContext context;
@@ -43,7 +40,10 @@ class BlockExecutionTest {
     void testPrintBlockExecution() {
         PrintBlock printBlock = PrintBlock.builder()
                 .id(1L)
-                .message("Hello World")
+                .messageExpressionBlock(team8.model.expression.LiteralExpressionBlock.builder()
+                        .value("Hello World")
+                        .literalType("STRING")
+                        .build())
                 .nextBlockId(2L)
                 .build();
 
@@ -60,7 +60,9 @@ class BlockExecutionTest {
 
         PrintBlock printBlock = PrintBlock.builder()
                 .id(1L)
-                .message("x")
+                .messageExpressionBlock(team8.model.expression.VariableExpressionBlock.builder()
+                        .variableName("x")
+                        .build())
                 .nextBlockId(null)
                 .build();
 
@@ -88,44 +90,48 @@ class BlockExecutionTest {
     }
 
     @Test
-    @DisplayName("AddBlock 실행 테스트")
-    void testAddBlockExecution() {
-        context.setVariableType("a", "number");
+    @DisplayName("VariableAssignBlock 표현식을 사용해 덧셈을 수행한다")
+    void testVariableAssignAddition() {
         context.setVariable("a", 5);
-        context.setVariableType("b", "number");
         context.setVariable("b", 3);
         context.setVariableMeta(99L, "result", "number");
 
-        AddBlock addBlock = AddBlock.builder()
+        team8.model.variable.VariableAssignBlock assignBlock = team8.model.variable.VariableAssignBlock.builder()
                 .id(1L)
-                .operand1Block(team8.model.expression.VariableExpressionBlock.builder().variableName("a").build())
-                .operand2Block(team8.model.expression.VariableExpressionBlock.builder().variableName("b").build())
-                .resultVariable("result")
-                .resultVariableId(99L)
+                .variableId(99L)
+                .variableName("result")
+                .valueExpressionBlock(team8.model.expression.BinaryExpressionBlock.builder()
+                        .operator("+")
+                        .left(team8.model.expression.VariableExpressionBlock.builder().variableName("a").build())
+                        .right(team8.model.expression.VariableExpressionBlock.builder().variableName("b").build())
+                        .build())
                 .nextBlockId(2L)
                 .build();
 
-        ExecutionResult result = addBlock.execute(context);
+        ExecutionResult result = assignBlock.execute(context);
 
         assertEquals(2L, result.getNextBlockId());
         assertEquals(8.0, context.getVariable("result"));
     }
 
     @Test
-    @DisplayName("AddBlock 리터럴 값 테스트")
-    void testAddBlockWithLiterals() {
+    @DisplayName("VariableAssignBlock 리터럴 덧셈 테스트")
+    void testVariableAssignWithLiterals() {
         context.setVariableMeta(100L, "sum", "number");
 
-        AddBlock addBlock = AddBlock.builder()
+        team8.model.variable.VariableAssignBlock assignBlock = team8.model.variable.VariableAssignBlock.builder()
                 .id(1L)
-                .operand1Block(team8.model.expression.LiteralExpressionBlock.builder().value("10").literalType("NUMBER").build())
-                .operand2Block(team8.model.expression.LiteralExpressionBlock.builder().value("20").literalType("NUMBER").build())
-                .resultVariable("sum")
-                .resultVariableId(100L)
+                .variableId(100L)
+                .variableName("sum")
+                .valueExpressionBlock(team8.model.expression.BinaryExpressionBlock.builder()
+                        .operator("+")
+                        .left(team8.model.expression.LiteralExpressionBlock.builder().value("10").literalType("NUMBER").build())
+                        .right(team8.model.expression.LiteralExpressionBlock.builder().value("20").literalType("NUMBER").build())
+                        .build())
                 .nextBlockId(null)
                 .build();
 
-        ExecutionResult result = addBlock.execute(context);
+        ExecutionResult result = assignBlock.execute(context);
 
         assertNull(result.getNextBlockId());
         assertEquals(30.0, context.getVariable("sum"));

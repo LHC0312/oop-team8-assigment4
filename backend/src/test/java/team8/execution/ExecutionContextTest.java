@@ -155,4 +155,55 @@ class ExecutionContextTest {
                 .build();
         assertThrows(IllegalArgumentException.class, () -> context.evaluateExpression(expr));
     }
+
+    @Test
+    @DisplayName("variableId 우선으로 값을 찾는다")
+    void testVariableLookupById() {
+        context.setVariableMeta(10L, "idOnly", "number");
+        context.setVariable(10L, 7.5);
+
+        VariableExpressionBlock var = VariableExpressionBlock.builder()
+                .variableId(10L)
+                .build();
+
+        Object result = context.evaluateExpression(var);
+        assertEquals(7.5, result);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 변수 ID를 참조하면 예외를 던진다")
+    void testMissingVariableIdThrows() {
+        VariableExpressionBlock var = VariableExpressionBlock.builder()
+                .variableId(999L)
+                .build();
+
+        assertThrows(IllegalStateException.class, () -> context.evaluateExpression(var));
+    }
+
+    @Test
+    @DisplayName("문자열 평가 모드에서는 문자열과 숫자가 안전하게 연결된다")
+    void testEvaluateExpressionAsStringConcatenatesMixedTypes() {
+        context.setVariable("x", 10);
+
+        BinaryExpressionBlock expr = BinaryExpressionBlock.builder()
+                .operator("+")
+                .left(LiteralExpressionBlock.builder().value("value: ").literalType("STRING").build())
+                .right(VariableExpressionBlock.builder().variableName("x").build())
+                .build();
+
+        String result = context.evaluateExpressionAsString(expr);
+
+        assertEquals("value: 10", result);
+    }
+
+    @Test
+    @DisplayName("ExpressionBlock.execute는 문자열로 결과를 반환한다")
+    void testExpressionBlockExecuteReturnsString() {
+        LiteralExpressionBlock literal = LiteralExpressionBlock.builder()
+                .value("123")
+                .literalType("NUMBER")
+                .build();
+
+        assertEquals("123", literal.execute(context));
+    }
 }

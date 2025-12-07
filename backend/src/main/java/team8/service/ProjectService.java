@@ -8,10 +8,6 @@ import team8.dto.ProjectCreateRequest;
 import team8.dto.ProjectDto;
 import team8.model.Block;
 import team8.model.Project;
-import team8.model.arithmetic.AddBlock;
-import team8.model.arithmetic.DivideBlock;
-import team8.model.arithmetic.MultiplyBlock;
-import team8.model.arithmetic.SubtractBlock;
 import team8.model.control.ControlBlock;
 import team8.model.control.ForBlock;
 import team8.model.control.IfBlock;
@@ -20,12 +16,11 @@ import team8.model.output.PrintBlock;
 import team8.model.variable.VariableAssignBlock;
 import team8.model.variable.VariableDeclareBlock;
 import team8.repository.BlockRepository;
+import team8.repository.ExpressionRepository;
 import team8.repository.ProjectRepository;
-import team8.service.BlockServiceHelper;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import team8.service.BlockServiceHelper;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +29,7 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final BlockRepository blockRepository;
+    private final ExpressionRepository expressionRepository;
 
     public List<ProjectDto> getAllProjects() {
         return projectRepository.findAll().stream()
@@ -80,6 +76,14 @@ public class ProjectService {
                 .collect(Collectors.toList());
     }
 
+    private team8.model.expression.ExpressionBlock loadExpressionById(Long expressionId) {
+        if (expressionId == null) {
+            return null;
+        }
+        return expressionRepository.findById(expressionId)
+                .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
+    }
+
     private ProjectDto convertToDto(Project project) {
         List<BlockDto> blockDtos = project.getBlocks().stream()
                 .map(this::convertBlockToDto)
@@ -106,39 +110,23 @@ public class ProjectService {
                 .build();
 
         if (block instanceof ControlBlock controlBlock) {
-            dto.setCondition(BlockServiceHelper.toValueDto(controlBlock.getConditionExpressionBlock()));
+            dto.setCondition(BlockServiceHelper.toValueDto(controlBlock.getConditionExpressionBlock(), this::loadExpressionById));
             dto.setTrueBranchId(controlBlock.getTrueBranchId());
             dto.setFalseBranchId(controlBlock.getFalseBranchId());
 
             if (block instanceof ForBlock forBlock) {
-                dto.setInit(BlockServiceHelper.toValueDto(forBlock.getInitExpressionBlock()));
-                dto.setIncrement(BlockServiceHelper.toValueDto(forBlock.getIncrementExpressionBlock()));
+                dto.setInit(BlockServiceHelper.toValueDto(forBlock.getInitExpressionBlock(), this::loadExpressionById));
+                dto.setIncrement(BlockServiceHelper.toValueDto(forBlock.getIncrementExpressionBlock(), this::loadExpressionById));
             }
         } else if (block instanceof PrintBlock printBlock) {
-            dto.setMessage(BlockServiceHelper.toValueDto(printBlock.getMessageExpressionBlock()));
-        } else if (block instanceof AddBlock addBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(addBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(addBlock.getOperand2Block()));
-            dto.setResultVariable(addBlock.getResultVariable());
-        } else if (block instanceof SubtractBlock subtractBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(subtractBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(subtractBlock.getOperand2Block()));
-            dto.setResultVariable(subtractBlock.getResultVariable());
-        } else if (block instanceof MultiplyBlock multiplyBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(multiplyBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(multiplyBlock.getOperand2Block()));
-            dto.setResultVariable(multiplyBlock.getResultVariable());
-        } else if (block instanceof DivideBlock divideBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(divideBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(divideBlock.getOperand2Block()));
-            dto.setResultVariable(divideBlock.getResultVariable());
+            dto.setMessage(BlockServiceHelper.toValueDto(printBlock.getMessageExpressionBlock(), this::loadExpressionById));
         } else if (block instanceof VariableDeclareBlock declareBlock) {
             dto.setVariableName(declareBlock.getVariableName());
             dto.setVariableType(declareBlock.getVariableType());
-            dto.setInitial(BlockServiceHelper.toValueDto(declareBlock.getInitialExpressionBlock()));
+            dto.setInitial(BlockServiceHelper.toValueDto(declareBlock.getInitialExpressionBlock(), this::loadExpressionById));
         } else if (block instanceof VariableAssignBlock assignBlock) {
             dto.setVariableName(assignBlock.getVariableName());
-            dto.setValue(BlockServiceHelper.toValueDto(assignBlock.getValueExpressionBlock()));
+            dto.setValue(BlockServiceHelper.toValueDto(assignBlock.getValueExpressionBlock(), this::loadExpressionById));
         }
 
         return dto;

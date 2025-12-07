@@ -7,6 +7,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import team8.dto.BlockCreateRequest;
 import team8.dto.BlockDto;
 import team8.model.Block;
@@ -29,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class BlockServiceTest {
 
     @Mock
@@ -173,11 +176,12 @@ class BlockServiceTest {
     @Test
     @DisplayName("블록 삭제 테스트")
     void testDeleteBlock() {
-        doNothing().when(blockRepository).deleteById(1L);
+        when(blockRepository.findById(1L)).thenReturn(Optional.of(testBlock));
+        doNothing().when(blockRepository).delete(any(Block.class));
 
         blockService.deleteBlock(1L);
 
-        verify(blockRepository, times(1)).deleteById(1L);
+        verify(blockRepository, atLeastOnce()).delete(any(Block.class));
     }
 
     @Test

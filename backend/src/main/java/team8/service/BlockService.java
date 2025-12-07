@@ -3,15 +3,13 @@ package team8.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import team8.dto.BlockConnectRequest;
 import team8.dto.BlockCreateRequest;
 import team8.dto.BlockDto;
+import team8.dto.ExpressionConnectRequest;
 import team8.dto.ValueDto;
 import team8.model.Block;
 import team8.model.Project;
-import team8.model.arithmetic.AddBlock;
-import team8.model.arithmetic.DivideBlock;
-import team8.model.arithmetic.MultiplyBlock;
-import team8.model.arithmetic.SubtractBlock;
 import team8.model.control.ControlBlock;
 import team8.model.control.ForBlock;
 import team8.model.control.IfBlock;
@@ -32,6 +30,7 @@ import team8.repository.ExpressionRepository;
 import team8.repository.VariableRepository;
 
 import java.util.List;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 @Service
@@ -77,7 +76,120 @@ public class BlockService {
 
     @Transactional
     public void deleteBlock(Long id) {
-        blockRepository.deleteById(id);
+        deleteBlockRecursive(id, new java.util.HashSet<>());
+    }
+
+    private void deleteBlockRecursive(Long blockId, java.util.Set<Long> visited) {
+        if (blockId == null || visited.contains(blockId)) {
+            return;
+        }
+        visited.add(blockId);
+
+        Block block = blockRepository.findById(blockId).orElse(null);
+        if (block == null) {
+            return;
+        }
+
+        // 표현식 트리 삭제
+        deleteExpressionsOfBlock(block);
+
+        // 다음 블록/분기 블록 재귀 삭제
+        Long next = block.getNextBlockId();
+        if (block instanceof ControlBlock controlBlock) {
+            deleteBlockRecursive(controlBlock.getTrueBranchId(), visited);
+            deleteBlockRecursive(controlBlock.getFalseBranchId(), visited);
+        }
+        blockRepository.delete(block);
+        deleteBlockRecursive(next, visited);
+    }
+
+    @Transactional
+    public List<ValueDto> connectExpressions(Long projectId, List<ExpressionConnectRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+
+        for (ExpressionConnectRequest req : requests) {
+            if (req.getExpressionId() == null) {
+                continue;
+            }
+            ExpressionBlock expression = expressionRepository.findById(req.getExpressionId())
+                    .orElseThrow(() -> new RuntimeException("Expression not found: " + req.getExpressionId()));
+            if (expression.getProject() != null && !projectId.equals(expression.getProject().getId())) {
+                throw new IllegalArgumentException("Expression " + req.getExpressionId() + " does not belong to project " + projectId);
+            }
+
+            if (expression instanceof UnaryExpressionBlock unary) {
+                if (req.getOperandExpressionId() != null) {
+                    ExpressionBlock operand = expressionRepository.findById(req.getOperandExpressionId())
+                            .orElseThrow(() -> new RuntimeException("Operand expression not found: " + req.getOperandExpressionId()));
+                    if (operand.getProject() != null && !projectId.equals(operand.getProject().getId())) {
+                        throw new IllegalArgumentException("Operand expression " + req.getOperandExpressionId() + " does not belong to project " + projectId);
+                    }
+                    unary.setOperand(operand);
+                }
+            } else if (expression instanceof BinaryExpressionBlock binary) {
+                if (req.getLeftExpressionId() != null) {
+                    ExpressionBlock left = expressionRepository.findById(req.getLeftExpressionId())
+                            .orElseThrow(() -> new RuntimeException("Left expression not found: " + req.getLeftExpressionId()));
+                    if (left.getProject() != null && !projectId.equals(left.getProject().getId())) {
+                        throw new IllegalArgumentException("Left expression " + req.getLeftExpressionId() + " does not belong to project " + projectId);
+                    }
+                    binary.setLeft(left);
+                }
+                if (req.getRightExpressionId() != null) {
+                    ExpressionBlock right = expressionRepository.findById(req.getRightExpressionId())
+                            .orElseThrow(() -> new RuntimeException("Right expression not found: " + req.getRightExpressionId()));
+                    if (right.getProject() != null && !projectId.equals(right.getProject().getId())) {
+                        throw new IllegalArgumentException("Right expression " + req.getRightExpressionId() + " does not belong to project " + projectId);
+                    }
+                    binary.setRight(right);
+                }
+            }
+        }
+
+        return expressionRepository.findAll().stream()
+                .filter(expr -> expr.getProject() != null && projectId.equals(expr.getProject().getId()))
+                .map(expr -> BlockServiceHelper.toValueDto(expr, this::loadExpressionById))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<BlockDto> connectBlocks(Long projectId, List<BlockConnectRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return getBlocksByProjectId(projectId);
+        }
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+
+        for (BlockConnectRequest req : requests) {
+            if (req.getBlockId() == null) {
+                continue;
+            }
+            Block block = blockRepository.findById(req.getBlockId())
+                    .orElseThrow(() -> new RuntimeException("Block not found: " + req.getBlockId()));
+            if (!projectId.equals(block.getProject().getId())) {
+                throw new IllegalArgumentException("Block " + req.getBlockId() + " does not belong to project " + projectId);
+            }
+
+            if (req.getNextBlockId() != null) {
+                block.setNextBlockId(req.getNextBlockId());
+            }
+            if (block instanceof ControlBlock control) {
+                if (req.getTrueBranchId() != null) {
+                    control.setTrueBranchId(req.getTrueBranchId());
+                }
+                if (req.getFalseBranchId() != null) {
+                    control.setFalseBranchId(req.getFalseBranchId());
+                }
+            }
+        }
+
+        // 간단히 전체 프로젝트 블록을 DTO로 반환해 프론트가 최신 상태를 얻도록 함.
+        return getBlocksByProjectId(projectId);
     }
 
     private Block createBlockFromRequest(BlockCreateRequest request, Project project) {
@@ -113,38 +225,6 @@ public class BlockService {
             case "PRINT":
                 block = PrintBlock.builder()
                         .messageExpressionBlock(buildExpression(request.getMessage(), project))
-                        .build();
-                break;
-            case "ADD":
-                block = AddBlock.builder()
-                        .operand1Block(buildExpression(request.getOperand1(), project))
-                        .operand2Block(buildExpression(request.getOperand2(), project))
-                        .resultVariable(request.getResultVariable())
-                        .resultVariableId(request.getResultVariableId())
-                        .build();
-                break;
-            case "SUBTRACT":
-                block = SubtractBlock.builder()
-                        .operand1Block(buildExpression(request.getOperand1(), project))
-                        .operand2Block(buildExpression(request.getOperand2(), project))
-                        .resultVariable(request.getResultVariable())
-                        .resultVariableId(request.getResultVariableId())
-                        .build();
-                break;
-            case "MULTIPLY":
-                block = MultiplyBlock.builder()
-                        .operand1Block(buildExpression(request.getOperand1(), project))
-                        .operand2Block(buildExpression(request.getOperand2(), project))
-                        .resultVariable(request.getResultVariable())
-                        .resultVariableId(request.getResultVariableId())
-                        .build();
-                break;
-            case "DIVIDE":
-                block = DivideBlock.builder()
-                        .operand1Block(buildExpression(request.getOperand1(), project))
-                        .operand2Block(buildExpression(request.getOperand2(), project))
-                        .resultVariable(request.getResultVariable())
-                        .resultVariableId(request.getResultVariableId())
                         .build();
                 break;
             case "VAR_DECLARE":
@@ -208,58 +288,6 @@ public class BlockService {
             if (request.getMessage() != null) {
                 printBlock.setMessageExpressionBlock(buildExpression(request.getMessage(), printBlock.getProject()));
             }
-        } else if (block instanceof AddBlock addBlock) {
-            if (request.getOperand1() != null) {
-                addBlock.setOperand1Block(buildExpression(request.getOperand1(), addBlock.getProject()));
-            }
-            if (request.getOperand2() != null) {
-                addBlock.setOperand2Block(buildExpression(request.getOperand2(), addBlock.getProject()));
-            }
-            if (request.getResultVariable() != null) {
-                addBlock.setResultVariable(request.getResultVariable());
-            }
-            if (request.getResultVariableId() != null) {
-                addBlock.setResultVariableId(request.getResultVariableId());
-            }
-        } else if (block instanceof SubtractBlock subtractBlock) {
-            if (request.getOperand1() != null) {
-                subtractBlock.setOperand1Block(buildExpression(request.getOperand1(), subtractBlock.getProject()));
-            }
-            if (request.getOperand2() != null) {
-                subtractBlock.setOperand2Block(buildExpression(request.getOperand2(), subtractBlock.getProject()));
-            }
-            if (request.getResultVariable() != null) {
-                subtractBlock.setResultVariable(request.getResultVariable());
-            }
-            if (request.getResultVariableId() != null) {
-                subtractBlock.setResultVariableId(request.getResultVariableId());
-            }
-        } else if (block instanceof MultiplyBlock multiplyBlock) {
-            if (request.getOperand1() != null) {
-                multiplyBlock.setOperand1Block(buildExpression(request.getOperand1(), multiplyBlock.getProject()));
-            }
-            if (request.getOperand2() != null) {
-                multiplyBlock.setOperand2Block(buildExpression(request.getOperand2(), multiplyBlock.getProject()));
-            }
-            if (request.getResultVariable() != null) {
-                multiplyBlock.setResultVariable(request.getResultVariable());
-            }
-            if (request.getResultVariableId() != null) {
-                multiplyBlock.setResultVariableId(request.getResultVariableId());
-            }
-        } else if (block instanceof DivideBlock divideBlock) {
-            if (request.getOperand1() != null) {
-                divideBlock.setOperand1Block(buildExpression(request.getOperand1(), divideBlock.getProject()));
-            }
-            if (request.getOperand2() != null) {
-                divideBlock.setOperand2Block(buildExpression(request.getOperand2(), divideBlock.getProject()));
-            }
-            if (request.getResultVariable() != null) {
-                divideBlock.setResultVariable(request.getResultVariable());
-            }
-            if (request.getResultVariableId() != null) {
-                divideBlock.setResultVariableId(request.getResultVariableId());
-            }
         } else if (block instanceof VariableDeclareBlock declareBlock) {
             if (request.getVariableName() != null) {
                 declareBlock.setVariableName(request.getVariableName());
@@ -304,48 +332,81 @@ public class BlockService {
 
         if (block instanceof ControlBlock) {
             ControlBlock controlBlock = (ControlBlock) block;
-            dto.setCondition(BlockServiceHelper.toValueDto(controlBlock.getConditionExpressionBlock()));
+            dto.setCondition(BlockServiceHelper.toValueDto(controlBlock.getConditionExpressionBlock(), this::loadExpressionById));
             dto.setTrueBranchId(controlBlock.getTrueBranchId());
             dto.setFalseBranchId(controlBlock.getFalseBranchId());
 
             if (block instanceof ForBlock forBlock) {
-                dto.setInit(BlockServiceHelper.toValueDto(forBlock.getInitExpressionBlock()));
-                dto.setIncrement(BlockServiceHelper.toValueDto(forBlock.getIncrementExpressionBlock()));
+                dto.setInit(BlockServiceHelper.toValueDto(forBlock.getInitExpressionBlock(), this::loadExpressionById));
+                dto.setIncrement(BlockServiceHelper.toValueDto(forBlock.getIncrementExpressionBlock(), this::loadExpressionById));
             }
         } else if (block instanceof PrintBlock printBlock) {
-            dto.setMessage(BlockServiceHelper.toValueDto(printBlock.getMessageExpressionBlock()));
-        } else if (block instanceof AddBlock addBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(addBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(addBlock.getOperand2Block()));
-            dto.setResultVariable(addBlock.getResultVariable());
-            dto.setResultVariableId(addBlock.getResultVariableId());
-        } else if (block instanceof SubtractBlock subtractBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(subtractBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(subtractBlock.getOperand2Block()));
-            dto.setResultVariable(subtractBlock.getResultVariable());
-            dto.setResultVariableId(subtractBlock.getResultVariableId());
-        } else if (block instanceof MultiplyBlock multiplyBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(multiplyBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(multiplyBlock.getOperand2Block()));
-            dto.setResultVariable(multiplyBlock.getResultVariable());
-            dto.setResultVariableId(multiplyBlock.getResultVariableId());
-        } else if (block instanceof DivideBlock divideBlock) {
-            dto.setOperand1(BlockServiceHelper.toValueDto(divideBlock.getOperand1Block()));
-            dto.setOperand2(BlockServiceHelper.toValueDto(divideBlock.getOperand2Block()));
-            dto.setResultVariable(divideBlock.getResultVariable());
-            dto.setResultVariableId(divideBlock.getResultVariableId());
+            dto.setMessage(BlockServiceHelper.toValueDto(printBlock.getMessageExpressionBlock(), this::loadExpressionById));
         } else if (block instanceof VariableDeclareBlock declareBlock) {
             dto.setVariableName(declareBlock.getVariableName());
             dto.setVariableType(declareBlock.getVariableType());
             dto.setVariableId(declareBlock.getVariableId());
-            dto.setInitial(BlockServiceHelper.toValueDto(declareBlock.getInitialExpressionBlock()));
+            dto.setInitial(BlockServiceHelper.toValueDto(declareBlock.getInitialExpressionBlock(), this::loadExpressionById));
         } else if (block instanceof VariableAssignBlock assignBlock) {
             dto.setVariableName(assignBlock.getVariableName());
             dto.setVariableId(assignBlock.getVariableId());
-            dto.setValue(BlockServiceHelper.toValueDto(assignBlock.getValueExpressionBlock()));
+            dto.setValue(BlockServiceHelper.toValueDto(assignBlock.getValueExpressionBlock(), this::loadExpressionById));
         }
 
         return dto;
+    }
+
+    private ExpressionBlock loadExpressionById(Long expressionId) {
+        if (expressionId == null) {
+            return null;
+        }
+        return expressionRepository.findById(expressionId)
+                .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
+    }
+
+    @Transactional
+    public ValueDto createExpression(Long projectId, ValueDto dto) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+        ExpressionBlock expression = buildExpression(dto, project);
+        return BlockServiceHelper.toValueDto(expression, this::loadExpressionById);
+    }
+
+    @Transactional
+    public void deleteExpression(Long expressionId) {
+        ExpressionBlock expression = expressionRepository.findById(expressionId)
+                .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
+        deleteExpressionRecursive(expression, new java.util.HashSet<>());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ValueDto> getExpressionsByProject(Long projectId) {
+        return expressionRepository.findAll().stream()
+                .filter(expr -> expr.getProject() != null && projectId.equals(expr.getProject().getId()))
+                .map(expr -> BlockServiceHelper.toValueDto(expr, this::loadExpressionById))
+                .collect(Collectors.toList());
+    }
+
+    private void applyPosition(ExpressionBlock expressionBlock, ValueDto dto) {
+        if (expressionBlock == null || dto == null) {
+            return;
+        }
+        if (dto.getPositionX() != null) {
+            expressionBlock.setPositionX(dto.getPositionX());
+        }
+        if (dto.getPositionY() != null) {
+            expressionBlock.setPositionY(dto.getPositionY());
+        }
+    }
+
+    private ExpressionBlock resolveExpression(ExpressionBlock expressionBlock, Long expressionId) {
+        if (expressionBlock != null) {
+            return expressionBlock;
+        }
+        if (expressionId != null) {
+            return loadExpressionById(expressionId);
+        }
+        return null;
     }
 
     private ExpressionBlock buildExpression(ValueDto dto, Project project) {
@@ -354,13 +415,18 @@ public class BlockService {
         }
 
         if (dto.getBlockId() != null) {
-            ExpressionBlock existing = expressionRepository.findById(dto.getBlockId())
-                    .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + dto.getBlockId()));
-            // 프로젝트 일관성 확인(다르면 예외)
-            if (existing.getProject() != null && project != null && !existing.getProject().getId().equals(project.getId())) {
-                throw new IllegalArgumentException("Expression block does not belong to project: " + dto.getBlockId());
+            ExpressionBlock existing = expressionRepository.findById(dto.getBlockId()).orElse(null);
+            if (existing != null) {
+                // 프로젝트 일관성 확인(다르면 예외)
+                if (existing.getProject() != null && project != null && !existing.getProject().getId().equals(project.getId())) {
+                    throw new IllegalArgumentException("Expression block does not belong to project: " + dto.getBlockId());
+                }
+                applyPosition(existing, dto);
+                return existing;
             }
-            return existing;
+            if (dto.getValueType() == null) {
+                throw new IllegalArgumentException("Expression not found: " + dto.getBlockId());
+            }
         }
 
         String type = dto.getValueType();
@@ -379,17 +445,71 @@ public class BlockService {
             }
             expressionBlock = new VariableExpressionBlock(varId, varName);
         } else if ("UNARY".equalsIgnoreCase(type)) {
-            expressionBlock = new UnaryExpressionBlock(dto.getOperator(), buildExpression(dto.getOperand(), project));
+            ExpressionBlock operand = buildExpression(dto.getOperand(), project);
+            UnaryExpressionBlock unary = new UnaryExpressionBlock(dto.getOperator(),
+                    operand == null ? null : operand.getId());
+            unary.setOperand(operand);
+            expressionBlock = unary;
         } else if ("BINARY".equalsIgnoreCase(type)) {
-            expressionBlock = new BinaryExpressionBlock(dto.getOperator(),
-                    buildExpression(dto.getLeft(), project),
-                    buildExpression(dto.getRight(), project));
+            ExpressionBlock left = buildExpression(dto.getLeft(), project);
+            ExpressionBlock right = buildExpression(dto.getRight(), project);
+            BinaryExpressionBlock binary = new BinaryExpressionBlock(dto.getOperator(),
+                    left == null ? null : left.getId(),
+                    right == null ? null : right.getId());
+            binary.setLeft(left);
+            binary.setRight(right);
+            expressionBlock = binary;
         } else {
             throw new IllegalArgumentException("Unknown valueType: " + type);
         }
 
         expressionBlock.setProject(project);
-        return expressionBlock;
+        applyPosition(expressionBlock, dto);
+        return expressionRepository.save(expressionBlock);
+    }
+
+    private void deleteExpressionsOfBlock(Block block) {
+        java.util.Set<Long> visited = new java.util.HashSet<>();
+        if (block instanceof team8.model.control.ControlBlock control) {
+            deleteExpressionRecursive(resolveExpression(control.getConditionExpressionBlock(),
+                    control.getConditionExpressionBlock() != null ? control.getConditionExpressionBlock().getId() : null), visited);
+        }
+        if (block instanceof team8.model.output.PrintBlock print) {
+            deleteExpressionRecursive(resolveExpression(print.getMessageExpressionBlock(),
+                    print.getMessageExpressionBlock() != null ? print.getMessageExpressionBlock().getId() : null), visited);
+        }
+        if (block instanceof team8.model.variable.VariableDeclareBlock declare) {
+            deleteExpressionRecursive(resolveExpression(declare.getInitialExpressionBlock(),
+                    declare.getInitialExpressionBlock() != null ? declare.getInitialExpressionBlock().getId() : null), visited);
+        }
+        if (block instanceof team8.model.variable.VariableAssignBlock assign) {
+            deleteExpressionRecursive(resolveExpression(assign.getValueExpressionBlock(),
+                    assign.getValueExpressionBlock() != null ? assign.getValueExpressionBlock().getId() : null), visited);
+        }
+    }
+
+    private void deleteExpressionRecursive(ExpressionBlock expressionBlock, java.util.Set<Long> visited) {
+        if (expressionBlock == null) {
+            return;
+        }
+        Long exprId = expressionBlock.getId();
+        if (exprId != null && visited.contains(exprId)) {
+            return;
+        }
+        if (exprId != null) {
+            visited.add(exprId);
+        }
+
+        if (expressionBlock instanceof UnaryExpressionBlock unary) {
+            ExpressionBlock operand = resolveExpression(unary.getOperand(), unary.getOperandExpressionId());
+            deleteExpressionRecursive(operand, visited);
+        } else if (expressionBlock instanceof BinaryExpressionBlock binary) {
+            ExpressionBlock left = resolveExpression(binary.getLeft(), binary.getLeftExpressionId());
+            ExpressionBlock right = resolveExpression(binary.getRight(), binary.getRightExpressionId());
+            deleteExpressionRecursive(left, visited);
+            deleteExpressionRecursive(right, visited);
+        }
+        expressionRepository.delete(expressionBlock);
     }
 
     private String resolveLiteralType(Object data) {

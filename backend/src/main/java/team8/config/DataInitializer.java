@@ -19,6 +19,7 @@ public class DataInitializer implements CommandLineRunner {
 
     private final ProjectService projectService;
     private final BlockService blockService;
+    private final team8.repository.VariableRepository variableRepository;
 
     @Override
     public void run(String... args) {
@@ -91,7 +92,8 @@ public class DataInitializer implements CommandLineRunner {
 
         BlockDto varDeclare = blockService.createBlock(project.getId(),
             createVarDeclareBlockRequest(100, 200, 2, "i", "number", literal(0), null));
-        ValueDto iVar = variable(varDeclare.getVariableId(), "i");
+        Long iVarId = getVarId(project.getId(), "i");
+        ValueDto iVar = variable(iVarId, "i");
 
         ValueDto whileCond = binary("<", iVar, literal(5));
         BlockDto whileBlock = blockService.createBlock(project.getId(),
@@ -100,8 +102,9 @@ public class DataInitializer implements CommandLineRunner {
         BlockDto printBlock = blockService.createBlock(project.getId(),
             createPrintBlockRequest(200, 400, 4, iVar, null));
 
-        BlockDto addBlock = blockService.createBlock(project.getId(),
-            createAddBlockRequest(200, 500, 5, iVar, literal(1), iVar.getVariableId(), "i", null));
+        ValueDto incrementExpr = binary("+", iVar, literal(1));
+        BlockDto incrementAssign = blockService.createBlock(project.getId(),
+            createVarAssignBlockRequest(200, 500, 5, iVarId, "i", incrementExpr, null));
 
         blockService.updateBlock(startBlock.getId(),
             createBlockRequest("START", 100, 100, 1, varDeclare.getId()));
@@ -110,14 +113,14 @@ public class DataInitializer implements CommandLineRunner {
         blockService.updateBlock(whileBlock.getId(),
             createWhileBlockRequest(100, 300, 3, whileCond, printBlock.getId(), null));
         blockService.updateBlock(printBlock.getId(),
-            createPrintBlockRequest(200, 400, 4, iVar, addBlock.getId()));
-        blockService.updateBlock(addBlock.getId(),
-            createAddBlockRequest(200, 500, 5, iVar, literal(1), iVar.getVariableId(), "i", whileBlock.getId()));
+            createPrintBlockRequest(200, 400, 4, iVar, incrementAssign.getId()));
+        blockService.updateBlock(incrementAssign.getId(),
+            createVarAssignBlockRequest(200, 500, 5, iVarId, "i", incrementExpr, whileBlock.getId()));
     }
 
     private void createArithmeticProject() {
         ProjectDto project = projectService.createProject(
-            new ProjectCreateRequest("Arithmetic Operations", "Testing all arithmetic operations")
+            new ProjectCreateRequest("Arithmetic Operations", "Testing arithmetic expressions via variable assignments")
         );
 
         BlockDto startBlock = blockService.createBlock(project.getId(),
@@ -137,28 +140,49 @@ public class DataInitializer implements CommandLineRunner {
         BlockDto res4 = blockService.createBlock(project.getId(),
             createVarDeclareBlockRequest(100, 380, 7, "result4", "number", literal(0), null));
 
-        ValueDto aVar = variable(varA.getVariableId(), "a");
-        ValueDto bVar = variable(varB.getVariableId(), "b");
+        Long aId = getVarId(project.getId(), "a");
+        Long bId = getVarId(project.getId(), "b");
+        Long res1Id = getVarId(project.getId(), "result1");
+        Long res2Id = getVarId(project.getId(), "result2");
+        Long res3Id = getVarId(project.getId(), "result3");
+        Long res4Id = getVarId(project.getId(), "result4");
 
-        BlockDto addBlock = blockService.createBlock(project.getId(),
-            createAddBlockRequest(100, 400, 8, aVar, bVar, res1.getVariableId(), "result1", null));
+        ValueDto aVar = variable(aId, "a");
+        ValueDto bVar = variable(bId, "b");
+        ValueDto res1Var = variable(res1Id, "result1");
+        ValueDto res2Var = variable(res2Id, "result2");
+        ValueDto res3Var = variable(res3Id, "result3");
+        ValueDto res4Var = variable(res4Id, "result4");
+
+        ValueDto addExpr = binary("+", aVar, bVar);
+        ValueDto subExpr = binary("-", aVar, bVar);
+        ValueDto mulExpr = binary("*", aVar, bVar);
+        ValueDto divExpr = binary("/", aVar, bVar);
+
+        ValueDto addMsg = binary("+", literal("Addition: "), res1Var);
+        ValueDto subMsg = binary("+", literal("Subtraction: "), res2Var);
+        ValueDto mulMsg = binary("+", literal("Multiplication: "), res3Var);
+        ValueDto divMsg = binary("+", literal("Division: "), res4Var);
+
+        BlockDto assignAdd = blockService.createBlock(project.getId(),
+            createVarAssignBlockRequest(100, 400, 8, res1Id, "result1", addExpr, null));
         BlockDto print1 = blockService.createBlock(project.getId(),
-            createPrintBlockRequest(100, 500, 9, literal("Addition: result1"), null));
+            createPrintBlockRequest(100, 500, 9, addMsg, null));
 
-        BlockDto subtractBlock = blockService.createBlock(project.getId(),
-            createSubtractBlockRequest(100, 600, 10, aVar, bVar, res2.getVariableId(), "result2", null));
+        BlockDto assignSubtract = blockService.createBlock(project.getId(),
+            createVarAssignBlockRequest(100, 600, 10, res2Id, "result2", subExpr, null));
         BlockDto print2 = blockService.createBlock(project.getId(),
-            createPrintBlockRequest(100, 700, 11, literal("Subtraction: result2"), null));
+            createPrintBlockRequest(100, 700, 11, subMsg, null));
 
-        BlockDto multiplyBlock = blockService.createBlock(project.getId(),
-            createMultiplyBlockRequest(100, 800, 12, aVar, bVar, res3.getVariableId(), "result3", null));
+        BlockDto assignMultiply = blockService.createBlock(project.getId(),
+            createVarAssignBlockRequest(100, 800, 12, res3Id, "result3", mulExpr, null));
         BlockDto print3 = blockService.createBlock(project.getId(),
-            createPrintBlockRequest(100, 900, 13, literal("Multiplication: result3"), null));
+            createPrintBlockRequest(100, 900, 13, mulMsg, null));
 
-        BlockDto divideBlock = blockService.createBlock(project.getId(),
-            createDivideBlockRequest(100, 1000, 14, aVar, bVar, res4.getVariableId(), "result4", null));
+        BlockDto assignDivide = blockService.createBlock(project.getId(),
+            createVarAssignBlockRequest(100, 1000, 14, res4Id, "result4", divExpr, null));
         BlockDto print4 = blockService.createBlock(project.getId(),
-            createPrintBlockRequest(100, 1100, 15, literal("Division: result4"), null));
+            createPrintBlockRequest(100, 1100, 15, divMsg, null));
 
         blockService.updateBlock(startBlock.getId(),
             createBlockRequest("START", 100, 100, 1, varA.getId()));
@@ -173,22 +197,22 @@ public class DataInitializer implements CommandLineRunner {
         blockService.updateBlock(res3.getId(),
             createVarDeclareBlockRequest(100, 370, 6, "result3", "number", literal(0), res4.getId()));
         blockService.updateBlock(res4.getId(),
-            createVarDeclareBlockRequest(100, 380, 7, "result4", "number", literal(0), addBlock.getId()));
+            createVarDeclareBlockRequest(100, 380, 7, "result4", "number", literal(0), assignAdd.getId()));
 
-        blockService.updateBlock(addBlock.getId(),
-            createAddBlockRequest(100, 400, 8, aVar, bVar, res1.getVariableId(), "result1", print1.getId()));
+        blockService.updateBlock(assignAdd.getId(),
+            createVarAssignBlockRequest(100, 400, 8, res1Id, "result1", addExpr, print1.getId()));
         blockService.updateBlock(print1.getId(),
-            createPrintBlockRequest(100, 500, 9, literal("Addition: result1"), subtractBlock.getId()));
-        blockService.updateBlock(subtractBlock.getId(),
-            createSubtractBlockRequest(100, 600, 10, aVar, bVar, res2.getVariableId(), "result2", print2.getId()));
+            createPrintBlockRequest(100, 500, 9, addMsg, assignSubtract.getId()));
+        blockService.updateBlock(assignSubtract.getId(),
+            createVarAssignBlockRequest(100, 600, 10, res2Id, "result2", subExpr, print2.getId()));
         blockService.updateBlock(print2.getId(),
-            createPrintBlockRequest(100, 700, 11, literal("Subtraction: result2"), multiplyBlock.getId()));
-        blockService.updateBlock(multiplyBlock.getId(),
-            createMultiplyBlockRequest(100, 800, 12, aVar, bVar, res3.getVariableId(), "result3", print3.getId()));
+            createPrintBlockRequest(100, 700, 11, subMsg, assignMultiply.getId()));
+        blockService.updateBlock(assignMultiply.getId(),
+            createVarAssignBlockRequest(100, 800, 12, res3Id, "result3", mulExpr, print3.getId()));
         blockService.updateBlock(print3.getId(),
-            createPrintBlockRequest(100, 900, 13, literal("Multiplication: result3"), divideBlock.getId()));
-        blockService.updateBlock(divideBlock.getId(),
-            createDivideBlockRequest(100, 1000, 14, aVar, bVar, res4.getVariableId(), "result4", print4.getId()));
+            createPrintBlockRequest(100, 900, 13, mulMsg, assignDivide.getId()));
+        blockService.updateBlock(assignDivide.getId(),
+            createVarAssignBlockRequest(100, 1000, 14, res4Id, "result4", divExpr, print4.getId()));
     }
 
     // Helper methods
@@ -231,47 +255,13 @@ public class DataInitializer implements CommandLineRunner {
         return request;
     }
 
-    private BlockCreateRequest createAddBlockRequest(int x, int y, int order,
-                                                    ValueDto operand1, ValueDto operand2,
-                                                    Long resultVarId, String resultVarName, Long nextBlockId) {
-        BlockCreateRequest request = createBlockRequest("ADD", x, y, order, nextBlockId);
-        request.setOperand1(operand1);
-        request.setOperand2(operand2);
-        request.setResultVariableId(resultVarId);
-        request.setResultVariable(resultVarName);
-        return request;
-    }
-
-    private BlockCreateRequest createSubtractBlockRequest(int x, int y, int order,
-                                                          ValueDto operand1, ValueDto operand2,
-                                                          Long resultVarId, String resultVarName, Long nextBlockId) {
-        BlockCreateRequest request = createBlockRequest("SUBTRACT", x, y, order, nextBlockId);
-        request.setOperand1(operand1);
-        request.setOperand2(operand2);
-        request.setResultVariableId(resultVarId);
-        request.setResultVariable(resultVarName);
-        return request;
-    }
-
-    private BlockCreateRequest createMultiplyBlockRequest(int x, int y, int order,
-                                                          ValueDto operand1, ValueDto operand2,
-                                                          Long resultVarId, String resultVarName, Long nextBlockId) {
-        BlockCreateRequest request = createBlockRequest("MULTIPLY", x, y, order, nextBlockId);
-        request.setOperand1(operand1);
-        request.setOperand2(operand2);
-        request.setResultVariableId(resultVarId);
-        request.setResultVariable(resultVarName);
-        return request;
-    }
-
-    private BlockCreateRequest createDivideBlockRequest(int x, int y, int order,
-                                                        ValueDto operand1, ValueDto operand2,
-                                                        Long resultVarId, String resultVarName, Long nextBlockId) {
-        BlockCreateRequest request = createBlockRequest("DIVIDE", x, y, order, nextBlockId);
-        request.setOperand1(operand1);
-        request.setOperand2(operand2);
-        request.setResultVariableId(resultVarId);
-        request.setResultVariable(resultVarName);
+    private BlockCreateRequest createVarAssignBlockRequest(int x, int y, int order,
+                                                           Long variableId, String variableName,
+                                                           ValueDto value, Long nextBlockId) {
+        BlockCreateRequest request = createBlockRequest("VAR_ASSIGN", x, y, order, nextBlockId);
+        request.setVariableId(variableId);
+        request.setVariableName(variableName);
+        request.setValue(value);
         return request;
     }
 
@@ -297,5 +287,11 @@ public class DataInitializer implements CommandLineRunner {
                 .left(left)
                 .right(right)
                 .build();
+    }
+
+    private Long getVarId(Long projectId, String name) {
+        return variableRepository.findByProjectIdAndName(projectId, name)
+                .map(team8.model.variable.Variable::getId)
+                .orElseThrow(() -> new IllegalStateException("Variable not found for project " + projectId + ": " + name));
     }
 }

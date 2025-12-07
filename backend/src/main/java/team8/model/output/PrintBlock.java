@@ -37,16 +37,17 @@ public class PrintBlock extends OutputBlock {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Object evaluatedMessage = null;
+        String evaluatedMessage = "";
         if (messageExpressionBlock != null) {
-            evaluatedMessage = context.evaluateExpression(messageExpressionBlock);
+            evaluatedMessage = messageExpressionBlock.execute(context);
         }
 
         if (evaluatedMessage == null) {
-            evaluatedMessage = previewExpression(messageExpressionBlock);
+            Object preview = previewExpression(messageExpressionBlock);
+            evaluatedMessage = preview == null ? "" : preview.toString();
         }
 
-        context.sendOutput("PRINT", evaluatedMessage == null ? "" : evaluatedMessage);
+        context.sendOutput("PRINT", evaluatedMessage);
         return new ExecutionResult(getNextBlockId());
     }
 

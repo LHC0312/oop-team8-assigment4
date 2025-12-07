@@ -25,11 +25,6 @@ public class BlockCreateRequest {
     private ValueDto increment;
     private ValueDto message;
 
-    private ValueDto operand1;
-    private ValueDto operand2;
-    private String resultVariable; // 호환용
-    private Long resultVariableId;
-
     private String variableName; // VAR_DECLARE 전용
     private String variableType;
     private Long variableId; // 참조용 (VAR_ASSIGN 등)
