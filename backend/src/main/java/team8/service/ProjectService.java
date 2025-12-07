@@ -76,14 +76,6 @@ public class ProjectService {
                 .collect(Collectors.toList());
     }
 
-    private team8.model.expression.ExpressionBlock loadExpressionById(Long expressionId) {
-        if (expressionId == null) {
-            return null;
-        }
-        return expressionRepository.findById(expressionId)
-                .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
-    }
-
     private ProjectDto convertToDto(Project project) {
         List<BlockDto> blockDtos = project.getBlocks().stream()
                 .map(this::convertBlockToDto)
@@ -110,23 +102,30 @@ public class ProjectService {
                 .build();
 
         if (block instanceof ControlBlock controlBlock) {
-            dto.setCondition(BlockServiceHelper.toValueDto(controlBlock.getConditionExpressionBlock(), this::loadExpressionById));
+            team8.model.expression.ExpressionBlock condExpr = controlBlock.getConditionExpressionBlock();
+            dto.setConditionExpressionId(condExpr != null ? condExpr.getId() : null);
             dto.setTrueBranchId(controlBlock.getTrueBranchId());
             dto.setFalseBranchId(controlBlock.getFalseBranchId());
 
             if (block instanceof ForBlock forBlock) {
-                dto.setInit(BlockServiceHelper.toValueDto(forBlock.getInitExpressionBlock(), this::loadExpressionById));
-                dto.setIncrement(BlockServiceHelper.toValueDto(forBlock.getIncrementExpressionBlock(), this::loadExpressionById));
+                team8.model.expression.ExpressionBlock initExpr = forBlock.getInitExpressionBlock();
+                team8.model.expression.ExpressionBlock incrExpr = forBlock.getIncrementExpressionBlock();
+                dto.setInitExpressionId(initExpr != null ? initExpr.getId() : null);
+                dto.setIncrementExpressionId(incrExpr != null ? incrExpr.getId() : null);
             }
         } else if (block instanceof PrintBlock printBlock) {
-            dto.setMessage(BlockServiceHelper.toValueDto(printBlock.getMessageExpressionBlock(), this::loadExpressionById));
+            team8.model.expression.ExpressionBlock msgExpr = printBlock.getMessageExpressionBlock();
+            dto.setMessageExpressionId(msgExpr != null ? msgExpr.getId() : null);
         } else if (block instanceof VariableDeclareBlock declareBlock) {
             dto.setVariableName(declareBlock.getVariableName());
             dto.setVariableType(declareBlock.getVariableType());
-            dto.setInitial(BlockServiceHelper.toValueDto(declareBlock.getInitialExpressionBlock(), this::loadExpressionById));
+            team8.model.expression.ExpressionBlock initialExpr = declareBlock.getInitialExpressionBlock();
+            dto.setInitialExpressionId(initialExpr != null ? initialExpr.getId() : null);
         } else if (block instanceof VariableAssignBlock assignBlock) {
             dto.setVariableName(assignBlock.getVariableName());
-            dto.setValue(BlockServiceHelper.toValueDto(assignBlock.getValueExpressionBlock(), this::loadExpressionById));
+            dto.setVariableId(assignBlock.getVariableId());
+            team8.model.expression.ExpressionBlock valueExpr = assignBlock.getValueExpressionBlock();
+            dto.setValueExpressionId(valueExpr != null ? valueExpr.getId() : null);
         }
 
         return dto;

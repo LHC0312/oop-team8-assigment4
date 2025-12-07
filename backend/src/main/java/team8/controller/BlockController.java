@@ -68,4 +68,12 @@ public class BlockController {
         blockService.deleteBlock(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/project/{projectId}/connect-expressions")
+    @Operation(summary = "블록-표현식 연결 갱신", description = "블록의 표현식 슬롯(condition, message, value 등)에 표현식을 연결하거나 해제합니다.")
+    public ResponseEntity<List<BlockDto>> connectBlockExpressions(
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId,
+            @RequestBody List<team8.dto.BlockExpressionConnectRequest> requests) {
+        return ResponseEntity.ok(blockService.connectBlockExpressions(projectId, requests));
+    }
 }

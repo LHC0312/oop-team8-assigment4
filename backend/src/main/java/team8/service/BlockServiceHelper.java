@@ -43,36 +43,24 @@ public final class BlockServiceHelper {
                     .build();
         }
         if (block instanceof UnaryExpressionBlock unary) {
-            ExpressionBlock operand = unary.getOperand();
-            if (operand == null && expressionLoader != null) {
-                operand = expressionLoader.apply(unary.getOperandExpressionId());
-            }
             return ValueDto.builder()
                     .blockId(unary.getId())
                     .positionX(unary.getPositionX())
                     .positionY(unary.getPositionY())
                     .valueType("UNARY")
                     .operator(unary.getOperator())
-                    .operand(toValueDto(operand, expressionLoader))
+                    .operandId(unary.getOperandExpressionId())
                     .build();
         }
         if (block instanceof BinaryExpressionBlock binary) {
-            ExpressionBlock left = binary.getLeft();
-            ExpressionBlock right = binary.getRight();
-            if (left == null && expressionLoader != null) {
-                left = expressionLoader.apply(binary.getLeftExpressionId());
-            }
-            if (right == null && expressionLoader != null) {
-                right = expressionLoader.apply(binary.getRightExpressionId());
-            }
             return ValueDto.builder()
                     .blockId(binary.getId())
                     .positionX(binary.getPositionX())
                     .positionY(binary.getPositionY())
                     .valueType("BINARY")
                     .operator(binary.getOperator())
-                    .left(toValueDto(left, expressionLoader))
-                    .right(toValueDto(right, expressionLoader))
+                    .leftId(binary.getLeftExpressionId())
+                    .rightId(binary.getRightExpressionId())
                     .build();
         }
         throw new IllegalArgumentException("Unknown expression block: " + block.getClass().getSimpleName());

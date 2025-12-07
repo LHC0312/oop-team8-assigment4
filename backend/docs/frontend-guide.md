@@ -55,9 +55,15 @@
   "positionX": 100,
   "positionY": 200,
   "order": 1,
-  "nextBlockId": 2
+  "nextBlockId": 2,
+  "conditionExpressionId": null,
+  "messageExpressionId": null,
+  "valueExpressionId": null,
+  "variableId": null
 }
 ```
+
+> **Note**: **요청(Request)** 시에는 `condition`, `message` 등에 표현식 객체(`ValueDto`)를 담아 보내면 한 번에 생성되지만, **응답(Response)** 시에는 `conditionExpressionId`와 같이 **ID만 반환**됩니다. 표현식의 상세 정보는 별도로 `/api/expressions/project/{projectId}`를 통해 조회해야 합니다.
 
 ### 2.2 START 블록
 
@@ -142,6 +148,23 @@ condition == false → nextBlockId (15)로 바로 이동
 }
 ```
 
+}
+```
+
+**응답 (Response):**
+```json
+{
+  "id": 10,
+  "blockType": "IF",
+  "conditionExpressionId": 105,
+  "trueBranchId": 10,
+  "falseBranchId": 12,
+  "nextBlockId": 15,
+  "positionX": 100,
+  "positionY": 200
+}
+```
+
 **실행 흐름:**
 ```
 condition == true  → trueBranchId (10) 실행 → nextBlockId (15)로 합류
@@ -165,6 +188,22 @@ POST /api/blocks/project/{projectId}
     "left": { "valueType": "VARIABLE", "variableId": 5 },
     "right": { "valueType": "LITERAL", "data": 5 }
   },
+  "trueBranchId": 10,
+  "nextBlockId": 20,
+  "positionX": 100,
+  "positionY": 300
+}
+```
+
+}
+```
+
+**응답 (Response):**
+```json
+{
+  "id": 20,
+  "blockType": "WHILE",
+  "conditionExpressionId": 205,
   "trueBranchId": 10,
   "nextBlockId": 20,
   "positionX": 100,
@@ -207,6 +246,24 @@ POST /api/blocks/project/{projectId}
     "left": { "valueType": "VARIABLE", "variableId": 5 },
     "right": { "valueType": "LITERAL", "data": 1 }
   },
+  "trueBranchId": 15,
+  "nextBlockId": 25,
+  "positionX": 100,
+  "positionY": 400
+}
+```
+
+}
+```
+
+**응답 (Response):**
+```json
+{
+  "id": 30,
+  "blockType": "FOR",
+  "initExpressionId": 301,
+  "conditionExpressionId": 302,
+  "incrementExpressionId": 303,
   "trueBranchId": 15,
   "nextBlockId": 25,
   "positionX": 100,
@@ -283,12 +340,12 @@ POST /api/blocks/project/{projectId}
   "variableName": "counter",
   "variableType": "number",
   "variableId": 15,
-  "initial": { "valueType": "LITERAL", "data": 0, "blockId": 101 },
+  "initialExpressionId": 101, // 생성된 표현식 ID
   "nextBlockId": 3
 }
 ```
 
-> ⚠️ **중요**: 응답의 `variableId`를 저장하여 이후 VAR_ASSIGN, 표현식에서 사용하세요.
+> ⚠️ **중요**: 응답의 `variableId`를 저장하여 이후 VAR_ASSIGN, 표현식에서 사용하세요. `initial` 객체는 반환되지 않으므로 `initialExpressionId`를 통해 참조해야 합니다.
 
 **지원 타입:**
 | variableType | 설명 | 예시 |
@@ -471,11 +528,7 @@ Content-Type: application/json
   "blockType": "PRINT",
   "positionX": 100,
   "positionY": 200,
-  "message": {
-    "blockId": 101,
-    "valueType": "LITERAL",
-    "data": "Hello"
-  }
+  "messageExpressionId": 101 // 생성된 메시지 표현식의 ID
 }
 ```
 
@@ -493,9 +546,42 @@ Content-Type: application/json
 
 > `null`이 아닌 필드만 업데이트됩니다.
 
-### 4.3 블록 연결 일괄 수정
+### 4.3 블록-표현식 연결 (중요)
 
-여러 블록의 연결을 한 번에 수정합니다.
+블록의 슬롯(condition, message 등)에 표현식을 연결하거나 해제합니다.
+
+```http
+POST /api/blocks/project/{projectId}/connect-expressions
+Content-Type: application/json
+
+[
+  {
+    "blockId": 5,
+    "slot": "message",
+    "expressionId": 101
+  },
+  {
+    "blockId": 6,
+    "slot": "condition",
+    "expressionId": null  // 연결 해제
+  }
+]
+```
+
+**지원 슬롯(slot):**
+- `condition`: IF, WHILE, FOR
+- `message`: PRINT
+- `value`: VAR_ASSIGN
+- `initial`: VAR_DECLARE
+- `init`, `increment`: FOR
+
+> **에러 처리**:
+> - 잘못된 슬롯이나 블록 ID: **400 Bad Request**
+> - 존재하지 않는 표현식 ID: **404 Not Found**
+
+### 4.4 블록 연결 일괄 수정 (Flow)
+
+블록 간의 실행 흐름(next, true/false branch)을 수정합니다.
 
 ```http
 POST /api/blocks/project/{projectId}/connect
@@ -540,6 +626,37 @@ Content-Type: application/json
   "left": { "blockId": 148, "valueType": "VARIABLE", "variableId": 10 },
   "right": { "blockId": 149, "valueType": "LITERAL", "data": 1 }
 }
+```
+
+### 4.6 표현식 수정 (New)
+
+표현식의 위치 등을 업데이트합니다.
+
+```http
+PUT /api/expressions/{expressionId}
+Content-Type: application/json
+
+{
+  "positionX": 200,
+  "positionY": 300
+}
+```
+
+### 4.7 표현식 연결 갱신
+
+표현식 간의 관계(부모-자식)를 수정합니다. `null`을 보내면 연결이 해제됩니다.
+
+```http
+POST /api/expressions/project/{projectId}/connect
+Content-Type: application/json
+
+[
+  {
+    "expressionId": 150,
+    "leftExpressionId": 148,
+    "rightExpressionId": null // 오른쪽 연결 해제
+  }
+]
 ```
 
 ### 4.6 실행

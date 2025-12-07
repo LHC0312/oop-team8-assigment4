@@ -49,8 +49,10 @@ public class DataInitializer implements CommandLineRunner {
         BlockDto printBlock = blockService.createBlock(project.getId(),
             createPrintBlockRequest(100, 200, 2, literal("Hello World!"), null));
 
-        blockService.updateBlock(startBlock.getId(),
-            createBlockRequest("START", 100, 100, 1, printBlock.getId()));
+        // connect API 사용
+        blockService.connectBlocks(project.getId(), java.util.List.of(
+            new team8.dto.BlockConnectRequest(startBlock.getId(), printBlock.getId(), null, null)
+        ));
     }
 
     private void createConditionalProject() {
@@ -67,19 +69,19 @@ public class DataInitializer implements CommandLineRunner {
 
         ValueDto condition = binary(">", xVar, literal(5));
         BlockDto ifBlock = blockService.createBlock(project.getId(),
-            createIfBlockRequest(100, 300, 3, condition, null, null));
+            createIfElseBlockRequest(100, 300, 3, condition, null, null));
 
         BlockDto trueBranch = blockService.createBlock(project.getId(),
             createPrintBlockRequest(200, 400, 4, literal("x is greater than 5"), null));
         BlockDto falseBranch = blockService.createBlock(project.getId(),
             createPrintBlockRequest(50, 400, 5, literal("x is not greater than 5"), null));
 
-        blockService.updateBlock(startBlock.getId(),
-            createBlockRequest("START", 100, 100, 1, varDeclare.getId()));
-        blockService.updateBlock(varDeclare.getId(),
-            createVarDeclareBlockRequest(100, 200, 2, "x", "number", literal(10), ifBlock.getId()));
-        blockService.updateBlock(ifBlock.getId(),
-            createIfBlockRequest(100, 300, 3, condition, trueBranch.getId(), falseBranch.getId()));
+        // connect API 사용
+        blockService.connectBlocks(project.getId(), java.util.List.of(
+            new team8.dto.BlockConnectRequest(startBlock.getId(), varDeclare.getId(), null, null),
+            new team8.dto.BlockConnectRequest(varDeclare.getId(), ifBlock.getId(), null, null),
+            new team8.dto.BlockConnectRequest(ifBlock.getId(), null, trueBranch.getId(), falseBranch.getId())
+        ));
     }
 
     private void createLoopProject() {
@@ -106,16 +108,14 @@ public class DataInitializer implements CommandLineRunner {
         BlockDto incrementAssign = blockService.createBlock(project.getId(),
             createVarAssignBlockRequest(200, 500, 5, iVarId, "i", incrementExpr, null));
 
-        blockService.updateBlock(startBlock.getId(),
-            createBlockRequest("START", 100, 100, 1, varDeclare.getId()));
-        blockService.updateBlock(varDeclare.getId(),
-            createVarDeclareBlockRequest(100, 200, 2, "i", "number", literal(0), whileBlock.getId()));
-        blockService.updateBlock(whileBlock.getId(),
-            createWhileBlockRequest(100, 300, 3, whileCond, printBlock.getId(), null));
-        blockService.updateBlock(printBlock.getId(),
-            createPrintBlockRequest(200, 400, 4, iVar, incrementAssign.getId()));
-        blockService.updateBlock(incrementAssign.getId(),
-            createVarAssignBlockRequest(200, 500, 5, iVarId, "i", incrementExpr, whileBlock.getId()));
+        // connect API 사용
+        blockService.connectBlocks(project.getId(), java.util.List.of(
+            new team8.dto.BlockConnectRequest(startBlock.getId(), varDeclare.getId(), null, null),
+            new team8.dto.BlockConnectRequest(varDeclare.getId(), whileBlock.getId(), null, null),
+            new team8.dto.BlockConnectRequest(whileBlock.getId(), null, printBlock.getId(), null),
+            new team8.dto.BlockConnectRequest(printBlock.getId(), incrementAssign.getId(), null, null),
+            new team8.dto.BlockConnectRequest(incrementAssign.getId(), whileBlock.getId(), null, null)
+        ));
     }
 
     private void createArithmeticProject() {
@@ -184,35 +184,23 @@ public class DataInitializer implements CommandLineRunner {
         BlockDto print4 = blockService.createBlock(project.getId(),
             createPrintBlockRequest(100, 1100, 15, divMsg, null));
 
-        blockService.updateBlock(startBlock.getId(),
-            createBlockRequest("START", 100, 100, 1, varA.getId()));
-        blockService.updateBlock(varA.getId(),
-            createVarDeclareBlockRequest(100, 200, 2, "a", "number", literal(10), varB.getId()));
-        blockService.updateBlock(varB.getId(),
-            createVarDeclareBlockRequest(100, 300, 3, "b", "number", literal(5), res1.getId()));
-        blockService.updateBlock(res1.getId(),
-            createVarDeclareBlockRequest(100, 350, 4, "result1", "number", literal(0), res2.getId()));
-        blockService.updateBlock(res2.getId(),
-            createVarDeclareBlockRequest(100, 360, 5, "result2", "number", literal(0), res3.getId()));
-        blockService.updateBlock(res3.getId(),
-            createVarDeclareBlockRequest(100, 370, 6, "result3", "number", literal(0), res4.getId()));
-        blockService.updateBlock(res4.getId(),
-            createVarDeclareBlockRequest(100, 380, 7, "result4", "number", literal(0), assignAdd.getId()));
-
-        blockService.updateBlock(assignAdd.getId(),
-            createVarAssignBlockRequest(100, 400, 8, res1Id, "result1", addExpr, print1.getId()));
-        blockService.updateBlock(print1.getId(),
-            createPrintBlockRequest(100, 500, 9, addMsg, assignSubtract.getId()));
-        blockService.updateBlock(assignSubtract.getId(),
-            createVarAssignBlockRequest(100, 600, 10, res2Id, "result2", subExpr, print2.getId()));
-        blockService.updateBlock(print2.getId(),
-            createPrintBlockRequest(100, 700, 11, subMsg, assignMultiply.getId()));
-        blockService.updateBlock(assignMultiply.getId(),
-            createVarAssignBlockRequest(100, 800, 12, res3Id, "result3", mulExpr, print3.getId()));
-        blockService.updateBlock(print3.getId(),
-            createPrintBlockRequest(100, 900, 13, mulMsg, assignDivide.getId()));
-        blockService.updateBlock(assignDivide.getId(),
-            createVarAssignBlockRequest(100, 1000, 14, res4Id, "result4", divExpr, print4.getId()));
+        // connect API 사용
+        blockService.connectBlocks(project.getId(), java.util.List.of(
+            new team8.dto.BlockConnectRequest(startBlock.getId(), varA.getId(), null, null),
+            new team8.dto.BlockConnectRequest(varA.getId(), varB.getId(), null, null),
+            new team8.dto.BlockConnectRequest(varB.getId(), res1.getId(), null, null),
+            new team8.dto.BlockConnectRequest(res1.getId(), res2.getId(), null, null),
+            new team8.dto.BlockConnectRequest(res2.getId(), res3.getId(), null, null),
+            new team8.dto.BlockConnectRequest(res3.getId(), res4.getId(), null, null),
+            new team8.dto.BlockConnectRequest(res4.getId(), assignAdd.getId(), null, null),
+            new team8.dto.BlockConnectRequest(assignAdd.getId(), print1.getId(), null, null),
+            new team8.dto.BlockConnectRequest(print1.getId(), assignSubtract.getId(), null, null),
+            new team8.dto.BlockConnectRequest(assignSubtract.getId(), print2.getId(), null, null),
+            new team8.dto.BlockConnectRequest(print2.getId(), assignMultiply.getId(), null, null),
+            new team8.dto.BlockConnectRequest(assignMultiply.getId(), print3.getId(), null, null),
+            new team8.dto.BlockConnectRequest(print3.getId(), assignDivide.getId(), null, null),
+            new team8.dto.BlockConnectRequest(assignDivide.getId(), print4.getId(), null, null)
+        ));
     }
 
     // Helper methods
@@ -242,6 +230,14 @@ public class DataInitializer implements CommandLineRunner {
 
     private BlockCreateRequest createIfBlockRequest(int x, int y, int order, ValueDto condition, Long trueBranchId, Long falseBranchId) {
         BlockCreateRequest request = createBlockRequest("IF", x, y, order, null);
+        request.setCondition(condition);
+        request.setTrueBranchId(trueBranchId);
+        request.setFalseBranchId(falseBranchId);
+        return request;
+    }
+
+    private BlockCreateRequest createIfElseBlockRequest(int x, int y, int order, ValueDto condition, Long trueBranchId, Long falseBranchId) {
+        BlockCreateRequest request = createBlockRequest("IF_ELSE", x, y, order, null);
         request.setCondition(condition);
         request.setTrueBranchId(trueBranchId);
         request.setFalseBranchId(falseBranchId);

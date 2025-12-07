@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import team8.dto.ExpressionConnectRequest;
 import team8.dto.ValueDto;
 import team8.service.BlockService;
@@ -55,5 +56,13 @@ public class ExpressionController {
             @Parameter(description = "표현식 ID") @PathVariable Long expressionId) {
         blockService.deleteExpression(expressionId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{expressionId}")
+    @Operation(summary = "표현식 업데이트", description = "표현식의 위치 등 속성을 업데이트합니다.")
+    public ResponseEntity<ValueDto> updateExpression(
+            @Parameter(description = "표현식 ID") @PathVariable Long expressionId,
+            @RequestBody ValueDto dto) {
+        return ResponseEntity.ok(blockService.updateExpression(expressionId, dto));
     }
 }

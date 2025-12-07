@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import team8.dto.ValueDto;
 
 @Data
 @NoArgsConstructor
@@ -23,15 +22,15 @@ public class BlockDto {
     private Long trueBranchId;
     private Long falseBranchId;
 
-    private ValueDto condition;
-    private ValueDto init;
-    private ValueDto increment;
-
-    private ValueDto message;
+    // Expression fields - ID only (full data from /api/expressions)
+    private Long conditionExpressionId;
+    private Long initExpressionId;
+    private Long incrementExpressionId;
+    private Long messageExpressionId;
+    private Long initialExpressionId;
+    private Long valueExpressionId;
 
     private String variableName;
     private String variableType;
     private Long variableId;
-    private ValueDto initial;
-    private ValueDto value;
 }

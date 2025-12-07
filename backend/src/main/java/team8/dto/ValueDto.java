@@ -52,13 +52,22 @@ public class ValueDto {
     private String operator;
 
     /**
-     * UNARY 피연산자
+     * UNARY 피연산자 (새 표현식 생성 시 사용)
      */
     private ValueDto operand;
+    /**
+     * UNARY 피연산자 ID (응답 시 사용)
+     */
+    private Long operandId;
 
     /**
-     * BINARY 좌/우 피연산자
+     * BINARY 좌/우 피연산자 (새 표현식 생성 시 사용)
      */
     private ValueDto left;
     private ValueDto right;
+    /**
+     * BINARY 좌/우 피연산자 ID (응답 시 사용)
+     */
+    private Long leftId;
+    private Long rightId;
 }

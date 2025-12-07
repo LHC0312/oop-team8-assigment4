@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <title>Block Coding Application</title>
@@ -20,7 +21,9 @@
             --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
@@ -310,7 +313,8 @@
             word-break: break-word;
         }
 
-        .empty-state, .loading {
+        .empty-state,
+        .loading {
             text-align: center;
             padding: 26px 10px;
             color: var(--muted);
@@ -327,15 +331,23 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         @media (max-width: 1024px) {
-            .layout { grid-template-columns: 1fr; }
+            .layout {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="page">
         <header>
@@ -366,9 +378,14 @@
 
                 <div>
                     <div class="controls">
-                        <button id="runBtn" class="primary" onclick="runProject(false)" disabled>▶ Run</button>
-                        <button id="runTraceBtn" onclick="runProject(true)" disabled class="secondary">🔍 Trace Run</button>
-                        <button onclick="clearOutput()" class="secondary">🗑 Clear Output</button>
+                        <button id="runBtn" class="primary" onclick="runProject(false, false)" disabled>▶ Run</button>
+                        <button id="runDebugBtn" onclick="runProject(false, true)" disabled class="secondary">🐛
+                            Debug</button>
+                        <button id="runTraceBtn" onclick="runProject(true, false)" disabled class="secondary">🔍
+                            Trace</button>
+                        <button id="stepBtn" onclick="stepExecution()" disabled class="secondary">⏭ Step</button>
+                        <button id="stopBtn" onclick="stopExecution()" disabled class="secondary">⏹ Stop</button>
+                        <button onclick="clearOutput()" class="secondary">🗑 Clear</button>
                     </div>
                 </div>
 
@@ -397,7 +414,7 @@
                     console.error('Error loading projects:', error);
                     document.getElementById('projectList').innerHTML =
                         '<div class="empty-state"><i>❌</i><p>Failed to load projects</p></div>';
-            });
+                });
         }
 
         function displayProjects(projects) {
@@ -425,7 +442,7 @@
                 item.classList.toggle('selected', item.dataset.id === String(projectId));
             });
 
-            setRunButtonsDisabled(false);
+            setRunButtonsDisabled(false, false);
 
             loadBlocks(projectId);
         }
@@ -486,17 +503,23 @@
         function getBlockDetails(block) {
             const details = [];
 
-            if (block.message) details.push(detailItem('Message', formatValue(block.message)));
-            if (block.condition) details.push(detailItem('Condition', formatValue(block.condition)));
+            // Expression ID 기반 필드들
+            if (block.messageExpressionId) details.push(detailItem('Message Expr', `ID: ${block.messageExpressionId}`));
+            if (block.conditionExpressionId) details.push(detailItem('Condition Expr', `ID: ${block.conditionExpressionId}`));
+            if (block.initialExpressionId) details.push(detailItem('Initial Expr', `ID: ${block.initialExpressionId}`));
+            if (block.valueExpressionId) details.push(detailItem('Value Expr', `ID: ${block.valueExpressionId}`));
+            if (block.initExpressionId) details.push(detailItem('Init Expr', `ID: ${block.initExpressionId}`));
+            if (block.incrementExpressionId) details.push(detailItem('Increment Expr', `ID: ${block.incrementExpressionId}`));
+
+            // 변수 정보
             if (block.variableName) details.push(detailItem('Variable', `${escapeHtml(block.variableName)} (id:${block.variableId ?? '-'}, type:${block.variableType ?? '-'})`));
-            if (block.initial) details.push(detailItem('Initial', formatValue(block.initial)));
-            if (block.value) details.push(detailItem('Value', formatValue(block.value)));
-            if (block.operand1 || block.resultVariable) {
-                details.push(detailItem('Operands', `${formatValue(block.operand1)} , ${formatValue(block.operand2 || '')}`));
-                details.push(detailItem('Result', `${escapeHtml(block.resultVariable || '')} (id:${block.resultVariableId ?? '-'})`));
-            }
+
+            // 분기 정보
             if (block.trueBranchId) details.push(detailItem('True Branch', block.trueBranchId));
             if (block.falseBranchId) details.push(detailItem('False Branch', block.falseBranchId));
+
+            // 위치 정보
+            details.push(detailItem('Position', `(${block.positionX ?? 0}, ${block.positionY ?? 0})`));
 
             return details.length > 0 ? details.join('') : detailItem('Info', 'No extra data');
         }
@@ -529,37 +552,83 @@
             });
         }
 
-        function runProject(traceEnabled) {
+        function runProject(traceEnabled, debugEnabled) {
             if (!selectedProjectId) {
                 alert('Please select a project first');
                 return;
             }
 
             clearOutput();
-            setRunButtonsDisabled(true);
+            setRunButtonsDisabled(true, true); // disable run buttons, enable control buttons
+
+            const params = new URLSearchParams();
+            if (traceEnabled) params.append('trace', 'true');
+            if (debugEnabled) params.append('debug', 'true');
 
             const url = '/api/execution/projects/' + selectedProjectId + '/run' +
-                    (traceEnabled ? '?trace=true' : '');
+                (params.toString() ? '?' + params.toString() : '');
 
-            fetch(url, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                currentSessionId = data.sessionId;
-                console.log('Session ID:', currentSessionId);
-                connect(currentSessionId);
-                showOutput({type: 'INFO', data: (traceEnabled ? 'Trace' : 'Run') + ' started for project ID: ' + selectedProjectId});
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showOutput({type: 'ERROR', data: 'Failed to start execution: ' + error.message});
-                setRunButtonsDisabled(false);
-            });
+            fetch(url, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    currentSessionId = data.sessionId;
+                    console.log('Session ID:', currentSessionId);
+                    connect(currentSessionId);
 
-            setTimeout(() => {
-                setRunButtonsDisabled(false);
-            }, 3000);
+                    let modeLabel = 'Run';
+                    if (debugEnabled) modeLabel = 'Debug';
+                    else if (traceEnabled) modeLabel = 'Trace';
+
+                    showOutput({ type: 'INFO', data: modeLabel + ' started for project ID: ' + selectedProjectId });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showOutput({ type: 'ERROR', data: 'Failed to start execution: ' + error.message });
+                    setRunButtonsDisabled(false, false);
+                });
+        }
+
+        function stepExecution() {
+            if (!currentSessionId) {
+                showOutput({ type: 'WARN', data: 'No active session' });
+                return;
+            }
+
+            fetch('/api/execution/sessions/' + currentSessionId + '/step', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    showOutput({ type: 'DEBUG', data: 'Step: ' + data.result });
+                })
+                .catch(error => {
+                    console.error('Step error:', error);
+                    showOutput({ type: 'ERROR', data: 'Step failed: ' + error.message });
+                });
+        }
+
+        function stopExecution() {
+            if (!currentSessionId) {
+                showOutput({ type: 'WARN', data: 'No active session' });
+                return;
+            }
+
+            fetch('/api/execution/sessions/' + currentSessionId + '/stop', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    showOutput({ type: 'INFO', data: 'Execution stopped' });
+                    setRunButtonsDisabled(false, false);
+                })
+                .catch(error => {
+                    console.error('Stop error:', error);
+                    showOutput({ type: 'ERROR', data: 'Stop failed: ' + error.message });
+                });
+        }
+
+        function setRunButtonsDisabled(runDisabled, controlsEnabled) {
+            document.getElementById('runBtn').disabled = runDisabled;
+            document.getElementById('runDebugBtn').disabled = runDisabled;
+            document.getElementById('runTraceBtn').disabled = runDisabled;
+            document.getElementById('stepBtn').disabled = !controlsEnabled;
+            document.getElementById('stopBtn').disabled = !controlsEnabled;
         }
 
         function showOutput(message) {
@@ -595,4 +664,5 @@
         }
     </script>
 </body>
+
 </html>

@@ -117,39 +117,59 @@ public class BlockService {
                 continue;
             }
             ExpressionBlock expression = expressionRepository.findById(req.getExpressionId())
-                    .orElseThrow(() -> new RuntimeException("Expression not found: " + req.getExpressionId()));
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Expression not found: " + req.getExpressionId()));
             if (expression.getProject() != null && !projectId.equals(expression.getProject().getId())) {
-                throw new IllegalArgumentException("Expression " + req.getExpressionId() + " does not belong to project " + projectId);
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Expression " + req.getExpressionId() + " does not belong to project " + projectId);
             }
 
             if (expression instanceof UnaryExpressionBlock unary) {
-                if (req.getOperandExpressionId() != null) {
-                    ExpressionBlock operand = expressionRepository.findById(req.getOperandExpressionId())
-                            .orElseThrow(() -> new RuntimeException("Operand expression not found: " + req.getOperandExpressionId()));
-                    if (operand.getProject() != null && !projectId.equals(operand.getProject().getId())) {
-                        throw new IllegalArgumentException("Operand expression " + req.getOperandExpressionId() + " does not belong to project " + projectId);
+                // operandExpressionId가 명시적으로 포함된 경우에만 업데이트
+                if (req.isHasOperandExpressionId()) {
+                    Long operandId = req.getOperandExpressionId();
+                    if (operandId == null) {
+                        unary.setOperand(null);
+                    } else {
+                        ExpressionBlock operand = expressionRepository.findById(operandId)
+                                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Operand expression not found: " + operandId));
+                        if (operand.getProject() != null && !projectId.equals(operand.getProject().getId())) {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Operand expression " + operandId + " does not belong to project " + projectId);
+                        }
+                        unary.setOperand(operand);
                     }
-                    unary.setOperand(operand);
                 }
             } else if (expression instanceof BinaryExpressionBlock binary) {
-                if (req.getLeftExpressionId() != null) {
-                    ExpressionBlock left = expressionRepository.findById(req.getLeftExpressionId())
-                            .orElseThrow(() -> new RuntimeException("Left expression not found: " + req.getLeftExpressionId()));
-                    if (left.getProject() != null && !projectId.equals(left.getProject().getId())) {
-                        throw new IllegalArgumentException("Left expression " + req.getLeftExpressionId() + " does not belong to project " + projectId);
+                // left가 명시적으로 포함된 경우에만 업데이트
+                if (req.isHasLeftExpressionId()) {
+                    Long leftId = req.getLeftExpressionId();
+                    if (leftId == null) {
+                        binary.setLeft(null);
+                    } else {
+                        ExpressionBlock left = expressionRepository.findById(leftId)
+                                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Left expression not found: " + leftId));
+                        if (left.getProject() != null && !projectId.equals(left.getProject().getId())) {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Left expression " + leftId + " does not belong to project " + projectId);
+                        }
+                        binary.setLeft(left);
                     }
-                    binary.setLeft(left);
                 }
-                if (req.getRightExpressionId() != null) {
-                    ExpressionBlock right = expressionRepository.findById(req.getRightExpressionId())
-                            .orElseThrow(() -> new RuntimeException("Right expression not found: " + req.getRightExpressionId()));
-                    if (right.getProject() != null && !projectId.equals(right.getProject().getId())) {
-                        throw new IllegalArgumentException("Right expression " + req.getRightExpressionId() + " does not belong to project " + projectId);
+                
+                // right가 명시적으로 포함된 경우에만 업데이트
+                if (req.isHasRightExpressionId()) {
+                    Long rightId = req.getRightExpressionId();
+                    if (rightId == null) {
+                        binary.setRight(null);
+                    } else {
+                        ExpressionBlock right = expressionRepository.findById(rightId)
+                                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Right expression not found: " + rightId));
+                        if (right.getProject() != null && !projectId.equals(right.getProject().getId())) {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Right expression " + rightId + " does not belong to project " + projectId);
+                        }
+                        binary.setRight(right);
                     }
-                    binary.setRight(right);
                 }
             }
-        }
+            }
+
 
         return expressionRepository.findAll().stream()
                 .filter(expr -> expr.getProject() != null && projectId.equals(expr.getProject().getId()))
@@ -192,6 +212,100 @@ public class BlockService {
         return getBlocksByProjectId(projectId);
     }
 
+    /**
+     * 블록의 표현식 슬롯에 표현식을 연결하거나 해제합니다.
+     * @param projectId 프로젝트 ID
+     * @param requests 연결 요청 목록 (blockId, slot, expressionId)
+     * @return 갱신된 블록 목록
+     */
+    @Transactional
+    public List<BlockDto> connectBlockExpressions(Long projectId, List<team8.dto.BlockExpressionConnectRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return getBlocksByProjectId(projectId);
+        }
+        
+        projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+
+        for (team8.dto.BlockExpressionConnectRequest req : requests) {
+            if (req.getBlockId() == null || req.getSlot() == null) {
+                continue;
+            }
+            
+            Block block = blockRepository.findById(req.getBlockId())
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Block not found: " + req.getBlockId()));
+            
+            if (!projectId.equals(block.getProject().getId())) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block " + req.getBlockId() + " does not belong to project " + projectId);
+            }
+            
+            // 표현식 조회 (null이면 연결 해제)
+            ExpressionBlock expression = null;
+            if (req.getExpressionId() != null) {
+                expression = expressionRepository.findById(req.getExpressionId())
+                        .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Expression not found: " + req.getExpressionId()));
+                if (expression.getProject() != null && !projectId.equals(expression.getProject().getId())) {
+                    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Expression " + req.getExpressionId() + " does not belong to project " + projectId);
+                }
+            }
+            
+            // 슬롯에 따라 표현식 연결/해제
+            String slot = req.getSlot().toLowerCase();
+            try {
+                switch (slot) {
+                    case "condition":
+                        if (block instanceof ControlBlock control) {
+                            control.setConditionExpressionBlock(expression);
+                        } else {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block " + req.getBlockId() + " does not have a 'condition' slot");
+                        }
+                        break;
+                    case "message":
+                        if (block instanceof PrintBlock print) {
+                            print.setMessageExpressionBlock(expression);
+                        } else {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block " + req.getBlockId() + " does not have a 'message' slot");
+                        }
+                        break;
+                    case "value":
+                        if (block instanceof VariableAssignBlock assign) {
+                            assign.setValueExpressionBlock(expression);
+                        } else {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block " + req.getBlockId() + " does not have a 'value' slot");
+                        }
+                        break;
+                    case "initial":
+                        if (block instanceof VariableDeclareBlock declare) {
+                            declare.setInitialExpressionBlock(expression);
+                        } else {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block " + req.getBlockId() + " does not have an 'initial' slot");
+                        }
+                        break;
+                    case "init":
+                        if (block instanceof ForBlock forBlock) {
+                            forBlock.setInitExpressionBlock(expression);
+                        } else {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block " + req.getBlockId() + " does not have an 'init' slot");
+                        }
+                        break;
+                    case "increment":
+                        if (block instanceof ForBlock forBlock) {
+                            forBlock.setIncrementExpressionBlock(expression);
+                        } else {
+                            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block " + req.getBlockId() + " does not have an 'increment' slot");
+                        }
+                        break;
+                    default:
+                        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Unknown slot: " + slot);
+                }
+            } catch (ClassCastException e) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Block type mismatch for slot: " + slot);
+            }
+        }
+
+        return getBlocksByProjectId(projectId);
+    }
+
     private Block createBlockFromRequest(BlockCreateRequest request, Project project) {
         Block block;
 
@@ -201,6 +315,13 @@ public class BlockService {
                 break;
             case "IF":
                 block = IfBlock.builder()
+                        .conditionExpressionBlock(buildExpression(request.getCondition(), project))
+                        .trueBranchId(request.getTrueBranchId())
+                        .falseBranchId(null)  // IF는 falseBranch 없음
+                        .build();
+                break;
+            case "IF_ELSE":
+                block = team8.model.control.IfElseBlock.builder()
                         .conditionExpressionBlock(buildExpression(request.getCondition(), project))
                         .trueBranchId(request.getTrueBranchId())
                         .falseBranchId(request.getFalseBranchId())
@@ -261,20 +382,13 @@ public class BlockService {
         setIfNotNull(block::setPositionX, request.getPositionX());
         setIfNotNull(block::setPositionY, request.getPositionY());
         setIfNotNull(block::setOrder, request.getOrder());
-        if (request.getNextBlockId() != null) {
-            block.setNextBlockId(request.getNextBlockId());
-        }
+        // 블록 연결(nextBlockId, trueBranchId, falseBranchId)은 connect API로만 처리
 
         if (block instanceof ControlBlock controlBlock) {
             if (request.getCondition() != null) {
                 controlBlock.setConditionExpressionBlock(buildExpression(request.getCondition(), controlBlock.getProject()));
             }
-            if (request.getTrueBranchId() != null) {
-                controlBlock.setTrueBranchId(request.getTrueBranchId());
-            }
-            if (request.getFalseBranchId() != null) {
-                controlBlock.setFalseBranchId(request.getFalseBranchId());
-            }
+            // trueBranchId, falseBranchId는 connect API로만 처리
 
             if (block instanceof ForBlock forBlock) {
                 if (request.getInit() != null) {
@@ -330,27 +444,33 @@ public class BlockService {
                 .nextBlockId(block.getNextBlockId())
                 .build();
 
-        if (block instanceof ControlBlock) {
-            ControlBlock controlBlock = (ControlBlock) block;
-            dto.setCondition(BlockServiceHelper.toValueDto(controlBlock.getConditionExpressionBlock(), this::loadExpressionById));
+        if (block instanceof ControlBlock controlBlock) {
+            // Expression ID만 반환 (전체 expression 데이터는 /api/expressions에서)
+            ExpressionBlock condExpr = controlBlock.getConditionExpressionBlock();
+            dto.setConditionExpressionId(condExpr != null ? condExpr.getId() : null);
             dto.setTrueBranchId(controlBlock.getTrueBranchId());
             dto.setFalseBranchId(controlBlock.getFalseBranchId());
 
             if (block instanceof ForBlock forBlock) {
-                dto.setInit(BlockServiceHelper.toValueDto(forBlock.getInitExpressionBlock(), this::loadExpressionById));
-                dto.setIncrement(BlockServiceHelper.toValueDto(forBlock.getIncrementExpressionBlock(), this::loadExpressionById));
+                ExpressionBlock initExpr = forBlock.getInitExpressionBlock();
+                ExpressionBlock incrExpr = forBlock.getIncrementExpressionBlock();
+                dto.setInitExpressionId(initExpr != null ? initExpr.getId() : null);
+                dto.setIncrementExpressionId(incrExpr != null ? incrExpr.getId() : null);
             }
         } else if (block instanceof PrintBlock printBlock) {
-            dto.setMessage(BlockServiceHelper.toValueDto(printBlock.getMessageExpressionBlock(), this::loadExpressionById));
+            ExpressionBlock msgExpr = printBlock.getMessageExpressionBlock();
+            dto.setMessageExpressionId(msgExpr != null ? msgExpr.getId() : null);
         } else if (block instanceof VariableDeclareBlock declareBlock) {
             dto.setVariableName(declareBlock.getVariableName());
             dto.setVariableType(declareBlock.getVariableType());
             dto.setVariableId(declareBlock.getVariableId());
-            dto.setInitial(BlockServiceHelper.toValueDto(declareBlock.getInitialExpressionBlock(), this::loadExpressionById));
+            ExpressionBlock initialExpr = declareBlock.getInitialExpressionBlock();
+            dto.setInitialExpressionId(initialExpr != null ? initialExpr.getId() : null);
         } else if (block instanceof VariableAssignBlock assignBlock) {
             dto.setVariableName(assignBlock.getVariableName());
             dto.setVariableId(assignBlock.getVariableId());
-            dto.setValue(BlockServiceHelper.toValueDto(assignBlock.getValueExpressionBlock(), this::loadExpressionById));
+            ExpressionBlock valueExpr = assignBlock.getValueExpressionBlock();
+            dto.setValueExpressionId(valueExpr != null ? valueExpr.getId() : null);
         }
 
         return dto;
@@ -360,8 +480,7 @@ public class BlockService {
         if (expressionId == null) {
             return null;
         }
-        return expressionRepository.findById(expressionId)
-                .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
+        return expressionRepository.findById(expressionId).orElse(null);
     }
 
     @Transactional
@@ -377,6 +496,45 @@ public class BlockService {
         ExpressionBlock expression = expressionRepository.findById(expressionId)
                 .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
         deleteExpressionRecursive(expression, new java.util.HashSet<>());
+    }
+
+    @Transactional
+    public ValueDto updateExpression(Long expressionId, ValueDto dto) {
+        ExpressionBlock expression = expressionRepository.findById(expressionId)
+                .orElseThrow(() -> new IllegalArgumentException("Expression not found: " + expressionId));
+        
+        // 위치 업데이트
+        if (dto.getPositionX() != null) {
+            expression.setPositionX(dto.getPositionX());
+        }
+        if (dto.getPositionY() != null) {
+            expression.setPositionY(dto.getPositionY());
+        }
+        
+        // LITERAL 값 업데이트
+        if (expression instanceof LiteralExpressionBlock literal && dto.getData() != null) {
+            literal.setValue(dto.getData().toString());
+        }
+        
+        // VARIABLE 업데이트
+        if (expression instanceof VariableExpressionBlock variable) {
+            if (dto.getVariableId() != null) {
+                variable.setVariableId(dto.getVariableId());
+            }
+            if (dto.getVariableName() != null) {
+                variable.setVariableName(dto.getVariableName());
+            }
+        }
+        
+        // UNARY/BINARY 연산자 업데이트
+        if (expression instanceof UnaryExpressionBlock unary && dto.getOperator() != null) {
+            unary.setOperator(dto.getOperator());
+        }
+        if (expression instanceof BinaryExpressionBlock binary && dto.getOperator() != null) {
+            binary.setOperator(dto.getOperator());
+        }
+        
+        return BlockServiceHelper.toValueDto(expression, this::loadExpressionById);
     }
 
     @Transactional(readOnly = true)
